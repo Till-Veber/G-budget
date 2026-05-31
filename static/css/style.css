@@ -370,7 +370,7 @@ body::after {
 }
 
 .stat-card:hover {
-  transform: translateY(-6px) scale(1.02);
+  transform: translateY(-6px);
   border-color: var(--accent-primary);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), var(--shadow-glow);
 }
@@ -675,12 +675,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 .btn-leave:hover {
   background: var(--accent-primary);
   color: var(--bg-primary);
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px var(--accent-glow);
-}
-
-.btn-leave:active {
-  transform: translateY(0);
 }
 
 /* ==================== ТАБЛИЦЫ ==================== */
@@ -730,7 +725,9 @@ tbody tr {
 
 tbody tr:hover {
   background: var(--bg-hover);
-  transform: scale(1.01);
+  box-shadow: 0 2px 12px var(--accent-glow);
+  position: relative;
+  z-index: 1;
 }
 
 tbody tr:last-child td {
@@ -757,24 +754,20 @@ tbody tr:last-child td {
 .edit-txn-btn:hover {
   color: var(--accent-primary);
   background: var(--bg-hover);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .delete-txn-btn:hover,
 .delete-invite-btn:hover {
   color: var(--error);
   background: rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 8px var(--error-glow);
 }
 
 .copy-btn:hover {
   color: var(--success);
   background: var(--bg-hover);
-}
-
-.edit-txn-btn:active,
-.delete-txn-btn:active,
-.copy-btn:active,
-.delete-invite-btn:active {
-  transform: scale(0.95);
+  box-shadow: 0 0 8px var(--success-glow);
 }
 
 .delete-txn-btn svg {
@@ -1425,6 +1418,12 @@ tbody tr:last-child td {
   gap: 8px;
   cursor: grab;
   user-select: none;
+}
+
+.category-item:hover {
+  box-shadow: 0 2px 12px var(--accent-glow);
+  border: 1px solid var(--accent-primary);
+  margin: 7px 0;
 }
 
 .category-item:active {

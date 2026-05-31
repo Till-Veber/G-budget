@@ -620,7 +620,21 @@
         }
 
         const url = `/export-report?report_type=${reportType}&group_by=${groupBy}&date_start=${dateStart}&date_end=${dateEnd}`;
-        window.location.href = url;
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => {
+            const canvas = document.getElementById('particles-canvas');
+            if (canvas) {
+                const event = new Event('resize');
+                window.dispatchEvent(event);
+            }
+        }, 100);
     }
 
     function init() {

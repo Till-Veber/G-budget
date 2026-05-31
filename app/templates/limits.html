@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Управление лимитами - FamilyBudget{% endblock %}
+{% block title %}Управление лимитами - G-Budget{% endblock %}
 
 {% block content %}
 <div class="grid-2 mb-4">
@@ -22,7 +22,7 @@
                         </tr>
                     </thead>
                     <tbody id="personalLimitsBody">
-                        <tr><td> colspan="5" class="text-center text-secondary">Загрузка...</td></tr>
+                        <tr><td colspan="5" class="text-center text-secondary">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -51,7 +51,7 @@
                         </tr>
                     </thead>
                     <tbody id="familyLimitsBody">
-                        <tr><td> colspan="5" class="text-center text-secondary">Загрузка...</td></tr>
+                        <tr><td colspan="5" class="text-center text-secondary">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -95,8 +95,36 @@
 <script>
     let currentLimitType = null;
     let currentEditCategoryId = null;
-    let expenseCategories = [];
+    let hierarchicalCategories = [];
     let isAdmin = false;
+
+    // Функция для рендеринга иерархических опций
+    function renderHierarchicalOptions(selectElement, selectedId = null) {
+        if (!selectElement) return;
+
+        selectElement.innerHTML = '<option value="">Выберите категорию</option>';
+
+        hierarchicalCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.style.color = cat.color;
+
+            // Создаём отступы для вложенности
+            let indent = '';
+            for (let i = 0; i < cat.level; i++) {
+                indent += '&nbsp;&nbsp;&nbsp;&nbsp;';
+            }
+            if (cat.level > 0) {
+                indent += '↳ ';
+            }
+            option.innerHTML = `${indent}${escapeHtml(cat.name)} (${cat.type})`;
+
+            if (selectedId && selectedId == cat.id) {
+                option.selected = true;
+            }
+            selectElement.appendChild(option);
+        });
+    }
 
     // Загрузка данных лимитов
     async function loadLimits() {
@@ -105,7 +133,7 @@
             const data = await response.json();
 
             if (data.success) {
-                expenseCategories = data.expense_categories;
+                hierarchicalCategories = data.hierarchical_categories || [];
                 isAdmin = data.is_admin;
 
                 // Показываем/скрываем карточку семейных лимитов
@@ -132,7 +160,7 @@
         const tbody = document.getElementById('personalLimitsBody');
 
         if (!limits || limits.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет личных лимитов</td</tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет личных лимитов</td></tr>';
             return;
         }
 
@@ -175,7 +203,7 @@
         const tbody = document.getElementById('familyLimitsBody');
 
         if (!limits || limits.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет семейных лимитов</td</tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет семейных лимитов</td></tr>';
             return;
         }
 
@@ -220,29 +248,14 @@
         return div.innerHTML;
     }
 
-    function updateCategoriesSelect(selectedId = null) {
-        const select = document.getElementById('edit_limit_category_id');
-        if (!select) return;
-
-        select.innerHTML = '<option value="">Выберите категорию</option>';
-
-        expenseCategories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.id;
-            option.textContent = cat.name;
-            option.style.color = cat.color;
-            if (selectedId && selectedId == cat.id) {
-                option.selected = true;
-            }
-            select.appendChild(option);
-        });
-    }
-
     function openLimitModal(type) {
         currentLimitType = type;
         currentEditCategoryId = null;
         document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Добавить личный лимит' : 'Добавить семейный лимит';
-        updateCategoriesSelect();
+
+        const selectElement = document.getElementById('edit_limit_category_id');
+        renderHierarchicalOptions(selectElement);
+
         document.getElementById('edit_limit_amount').value = '';
         document.getElementById('limitEditError').style.display = 'none';
         document.getElementById('limitEditModal').classList.add('active');
@@ -253,7 +266,10 @@
         currentLimitType = type;
         currentEditCategoryId = categoryId;
         document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Редактировать личный лимит' : 'Редактировать семейный лимит';
-        updateCategoriesSelect(categoryId);
+
+        const selectElement = document.getElementById('edit_limit_category_id');
+        renderHierarchicalOptions(selectElement, categoryId);
+
         document.getElementById('edit_limit_amount').value = currentAmount;
         document.getElementById('limitEditError').style.display = 'none';
         document.getElementById('limitEditModal').classList.add('active');

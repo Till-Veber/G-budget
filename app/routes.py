@@ -1262,8 +1262,9 @@ def api_limits_full():
     family_users = User.query.filter_by(family_id=current_user.family_id).all()
     user_ids = [u.id for u in family_users]
 
-    expense_categories = Category.query.filter_by(family_id=current_user.family_id, type='Расход').order_by(Category.name).all()
-    expense_categories_list = [{'id': c.id, 'name': c.name, 'color': c.color} for c in expense_categories]
+    # Получаем иерархические категории расходов
+    all_expense_categories = Category.query.filter_by(family_id=current_user.family_id, type='Расход').all()
+    hierarchical_categories = build_category_tree(all_expense_categories)
 
     # Личные лимиты
     personal_plans = UserPlan.query.filter_by(user_id=current_user.id).all()
@@ -1327,7 +1328,7 @@ def api_limits_full():
         'success': True,
         'personal_limits': personal_limits,
         'family_limits': family_limits,
-        'expense_categories': expense_categories_list,
+        'hierarchical_categories': hierarchical_categories,  # Заменяем expense_categories на иерархические
         'is_admin': current_user.role in ['Создатель', 'Администратор']
     })
 

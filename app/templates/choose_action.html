@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Выбор действия - FamilyBudget{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="max-width: 1000px; margin: 0 auto; min-height: 70vh; align-items: center;">
+    <div class="card text-center">
+        <div style="font-size: 4rem; margin-bottom: 24px; color: var(--accent-primary);">+</div>
+        <h3 class="card-title">Создать новую семью</h3>
+        <p class="text-secondary" style="margin: 16px 0;">Станьте администратором и создайте своё финансовое пространство</p>
+        <a href="{{ url_for('main.create_family') }}" class="btn btn-primary w-full">Создать семью</a>
+    </div>
+    <div class="card text-center">
+        <div style="font-size: 4rem; margin-bottom: 24px; color: var(--accent-primary);">→</div>
+        <h3 class="card-title">Присоединиться к семье</h3>
+        <p class="text-secondary" style="margin: 16px 0;">Введите код приглашения от администратора семьи</p>
+        <form method="POST" action="{{ url_for('main.join_family_by_code') }}">
+            <div class="form-group">
+                <input type="text" name="invite_code" placeholder="Введите код приглашения" required style="text-align: center; letter-spacing: 2px; font-family: monospace;">
+            </div>
+            <button type="submit" class="btn btn-secondary w-full">Присоединиться</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

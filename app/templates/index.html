@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}FamilyBudget{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="align-items: center; min-height: 80vh; gap: 48px;">
+    <div class="card" style="animation-delay: 0.1s; padding: 48px;">
+        <a href="{{ url_for('main.index') }}" class="logo" style="font-size: 2.5rem; display: inline-block; margin-bottom: 24px;">G-Budget</a>
+        <p class="text-secondary" style="font-size: 1.2rem; margin-bottom: 40px; line-height: 1.5;">
+            Управляйте семейным бюджетом вместе
+        </p>
+        <div class="flex gap-2">
+            <a href="{{ url_for('main.login') }}" class="btn btn-outline" style="padding: 14px 32px;">Войти</a>
+            <a href="{{ url_for('main.register') }}" class="btn btn-primary" style="padding: 14px 32px;">Зарегистрироваться</a>
+        </div>
+    </div>
+
+    <div class="card" style="animation-delay: 0.2s; padding: 48px;">
+        <p class="text-secondary" style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px;">Возможности системы</p>
+
+        <div class="feature-item" style="margin-bottom: 28px; transition: transform 0.2s ease; cursor: default;">
+            <div style="font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">Создание семьи и приглашение участников</div>
+            <p class="text-secondary" style="font-size: 0.9rem; line-height: 1.4;">Зарегистрируйтесь, создайте семейное пространство и приглашайте родственников по уникальному коду-приглашению. Каждая семья изолирована — ваши данные в безопасности.</p>
+        </div>
+
+        <div class="feature-item" style="margin-bottom: 28px; transition: transform 0.2s ease; cursor: default;">
+            <div style="font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">Учёт доходов и расходов</div>
+            <p class="text-secondary" style="font-size: 0.9rem; line-height: 1.4;">Добавляйте операции с указанием суммы, категории, даты и времени. Все члены семьи видят общую историю — полная прозрачность финансов.</p>
+        </div>
+
+        <div class="feature-item" style="margin-bottom: 28px; transition: transform 0.2s ease; cursor: default;">
+            <div style="font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">Иерархия категорий</div>
+            <p class="text-secondary" style="font-size: 0.9rem; line-height: 1.4;">Создавайте вложенные категории любой глубины. Например: «Продукты» → «Молочные продукты» → «Сыры». Детализируйте учёт как угодно.</p>
+        </div>
+
+        <div class="feature-item" style="margin-bottom: 28px; transition: transform 0.2s ease; cursor: default;">
+            <div style="font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">Личные и семейные лимиты</div>
+            <p class="text-secondary" style="font-size: 0.9rem; line-height: 1.4;">Устанавливайте общие ограничения для семьи и персональные лимиты для себя. Система предупредит при превышении бюджета.</p>
+        </div>
+
+        <div class="feature-item" style="margin-bottom: 0; transition: transform 0.2s ease; cursor: default;">
+            <div style="font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">Аналитика и отчёты</div>
+            <p class="text-secondary" style="font-size: 0.9rem; line-height: 1.4;">Круговая диаграмма расходов, прогресс-бары лимитов, таблицы операций и детальные отчёты по категориям и периодам.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.feature-item:hover {
+    transform: translateX(8px);
+}
+</style>
+{% endblock %}

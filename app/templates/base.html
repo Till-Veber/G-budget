@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}G-Budget - Управление семейным бюджетом{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Анимированный фон -->
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- Экран загрузки -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loader"></div>
+        <div class="loader-text">Загрузка системы</div>
+    </div>
+
+    {% if current_user.is_authenticated %}
+    <!-- Навигация (только для авторизованных) -->
+    <nav class="navbar" id="navbar">
+        <div class="container nav-inner">
+            <a href="{{ url_for('main.dashboard') }}" class="logo">G-Budget</a>
+            <div class="nav-links">
+                <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}">Дашборд</a>
+                <a href="{{ url_for('main.transactions') }}" class="nav-link {% if request.endpoint == 'main.transactions' %}active{% endif %}">Транзакции</a>
+                <a href="{{ url_for('main.categories') }}" class="nav-link {% if request.endpoint == 'main.categories' %}active{% endif %}">Категории</a>
+                <a href="{{ url_for('main.limits') }}" class="nav-link {% if request.endpoint == 'main.limits' %}active{% endif %}">Лимиты</a>
+                <a href="{{ url_for('main.reports') }}" class="nav-link {% if request.endpoint == 'main.reports' %}active{% endif %}">Отчёты</a>
+                <a href="{{ url_for('main.family_settings') }}" class="nav-link {% if request.endpoint == 'main.family_settings' %}active{% endif %}">Семья</a>
+                <a href="{{ url_for('main.logout') }}" class="nav-link">Выход</a>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Основной контент -->
+    <main class="container mt-4">
+        <!-- Flash сообщения -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="alerts-container">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'message' else 'info' }}">
+                            <strong>{% if category == 'success' %}Успешно!{% elif category == 'danger' %}Ошибка!{% elif category == 'warning' %}Внимание!{% else %}Информация{% endif %}</strong>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Скрипты -->
+    <script>
+        // Анимация фона (частицы) - исправленная версия
+        const canvas = document.getElementById('particles-canvas');
+        if (canvas) {
+            let ctx = canvas.getContext('2d');
+            let particlesArray = [];
+            let animationId = null;
+            let isActive = true;
+            let isPageVisible = true;
+            const mouse = { x: null, y: null, radius: 150 };
+
+            // Функция для остановки анимации
+            function stopAnimation() {
+                if (animationId) {
+                    cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+            }
+
+            // Функция для запуска анимации
+            function startAnimation() {
+                if (!isActive || !isPageVisible) return;
+                if (animationId) stopAnimation();
+                // Обновляем контекст на всякий случай
+                ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                animate();
+            }
+
+            // Обработчик видимости страницы
+            function handleVisibilityChange() {
+                isPageVisible = !document.hidden;
+                if (isPageVisible && isActive) {
+                    resizeCanvas();
+                    startAnimation();
+                } else if (!isPageVisible) {
+                    stopAnimation();
+                }
+            }
+
+            // Обработчик события pageshow (возврат из кэша)
+            function handlePageShow(event) {
+                // Полностью перезапускаем анимацию
+                setTimeout(() => {
+                    if (isActive) {
+                        stopAnimation();
+                        ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.setTransform(1, 0, 0, 1, 0, 0);
+                        }
+                        resizeCanvas();
+                        startAnimation();
+                    }
+                }, 30);
+            }
+
+            // Обработчик навигации по истории
+            function handlePopState() {
+                setTimeout(() => {
+                    if (isActive) {
+                        stopAnimation();
+                        ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.setTransform(1, 0, 0, 1, 0, 0);
+                        }
+                        resizeCanvas();
+                        startAnimation();
+                    }
+                }, 50);
+            }
+
+            // Обработчик beforeunload (уходим со страницы)
+            function handleBeforeUnload() {
+                stopAnimation();
+            }
+
+            function resizeCanvas() {
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return;
+
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                if (ctx) {
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    ctx.scale(dpr, dpr);
+                }
+                init();
+            }
+
+            function getMousePos(event) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (event.clientX - rect.left),
+                    y: (event.clientY - rect.top)
+                };
+            }
+
+            window.addEventListener('mousemove', (event) => {
+                const pos = getMousePos(event);
+                mouse.x = pos.x;
+                mouse.y = pos.y;
+            });
+
+            class Particle {
+                constructor(x, y, directionX, directionY, size, color) {
+                    this.x = x;
+                    this.y = y;
+                    this.directionX = directionX;
+                    this.directionY = directionY;
+                    this.size = size;
+                    this.color = color;
+                }
+                draw() {
+                    if (!ctx) return;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                }
+                update() {
+                    const rect = canvas.getBoundingClientRect();
+                    if (this.x > rect.width || this.x < 0) this.directionX = -this.directionX;
+                    if (this.y > rect.height || this.y < 0) this.directionY = -this.directionY;
+                    this.x += this.directionX;
+                    this.y += this.directionY;
+                    this.draw();
+                }
+            }
+
+            function init() {
+                particlesArray = [];
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return;
+
+                let numberOfParticles = Math.min(250, (rect.width * rect.height) / 3000);
+                for (let i = 0; i < numberOfParticles; i++) {
+                    let size = (Math.random() * 2) + 1;
+                    let x = (Math.random() * ((rect.width - size * 2) - (size * 2)) + size * 2);
+                    let y = (Math.random() * ((rect.height - size * 2) - (size * 2)) + size * 2);
+                    let directionX = (Math.random() * 1.8) - 0.9;
+                    let directionY = (Math.random() * 1.8) - 0.9;
+                    particlesArray.push(new Particle(x, y, directionX, directionY, size, '#ffffff'));
+                }
+            }
+
+            function connect() {
+                if (!ctx) return;
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return;
+
+                for (let a = 0; a < particlesArray.length; a++) {
+                    for (let b = a; b < particlesArray.length; b++) {
+                        let distance = ((particlesArray[a].x - particlesArray[b].x) * (particlesArray[a].x - particlesArray[b].x)) +
+                                       ((particlesArray[a].y - particlesArray[b].y) * (particlesArray[a].y - particlesArray[b].y));
+                        if (distance < (rect.width / 7) * (rect.height / 7)) {
+                            let opacityValue = 1 - (distance / 20000);
+                            ctx.strokeStyle = 'rgba(255, 255, 255,' + opacityValue * 0.1 + ')';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                            ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                            ctx.stroke();
+                        }
+                    }
+                    if (mouse.x != null && rect.width > 0 && rect.height > 0) {
+                        let mouseDistance = ((particlesArray[a].x - mouse.x) * (particlesArray[a].x - mouse.x)) +
+                                            ((particlesArray[a].y - mouse.y) * (particlesArray[a].y - mouse.y));
+                        if (mouseDistance < 20000) {
+                            ctx.strokeStyle = 'rgba(255, 122, 0,' + (1 - mouseDistance/20000) + ')';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                            ctx.lineTo(mouse.x, mouse.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            function animate() {
+                if (!isActive || !isPageVisible) return;
+                if (!ctx) {
+                    startAnimation();
+                    return;
+                }
+
+                const rect = canvas.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) {
+                    animationId = requestAnimationFrame(animate);
+                    return;
+                }
+
+                try {
+                    ctx.clearRect(0, 0, rect.width, rect.height);
+                    for (let i = 0; i < particlesArray.length; i++) particlesArray[i].update();
+                    connect();
+                    animationId = requestAnimationFrame(animate);
+                } catch (e) {
+                    startAnimation();
+                }
+            }
+
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    resizeCanvas();
+                }, 100);
+            });
+
+            window.addEventListener('mouseout', () => { mouse.x = undefined; mouse.y = undefined; });
+
+            // Подписываемся на события
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('pageshow', handlePageShow);
+            window.addEventListener('popstate', handlePopState);
+            window.addEventListener('beforeunload', handleBeforeUnload);
+
+            // Запуск
+            resizeCanvas();
+            startAnimation();
+        }
+
+        // Экран загрузки
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) loadingScreen.classList.add('hidden');
+            }, 500);
+        });
+
+        // Эффект прокрутки навигации
+        window.addEventListener('scroll', () => {
+            const navbar = document.getElementById('navbar');
+            if (navbar && window.scrollY > 50) navbar.classList.add('scrolled');
+            else if (navbar) navbar.classList.remove('scrolled');
+        });
+
+        // Закрытие алертов при клике
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.alert')) {
+                const alert = e.target.closest('.alert');
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100%)';
+                setTimeout(() => alert.remove(), 400);
+            }
+        });
+
+        // Глобальная функция для flash-уведомлений
+        window.showFlash = function(message, category = 'success') {
+            // Ищем контейнер для уведомлений
+            let container = document.querySelector('.alerts-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'alerts-container';
+                container.style.position = 'fixed';
+                container.style.top = '20px';
+                container.style.right = '20px';
+                container.style.zIndex = '10000';
+                document.body.appendChild(container);
+            }
+
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${category}`;
+            let prefix = '';
+            if (category === 'success') prefix = 'Успешно! ';
+            else if (category === 'danger') prefix = 'Ошибка! ';
+            else if (category === 'warning') prefix = 'Внимание! ';
+            alert.innerHTML = `<strong>${prefix}</strong>${message}`;
+
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100%)';
+                setTimeout(() => alert.remove(), 400);
+            }, 3000);
+        };
+
+    </script>
+
+        <!-- Модальное окно подтверждения -->
+    <div class="modal-overlay" id="confirmModal" onclick="closeConfirmModalOnOverlay(event)">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirmTitle">Подтверждение</h3>
+                <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage" class="text-secondary">Вы уверены?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">Отмена</button>
+                <button class="btn btn-danger" id="confirmBtn">Подтвердить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Глобальное модальное окно подтверждения
+    let confirmCallback = null;
+
+    function showConfirm(message, title = 'Подтверждение', onConfirm) {
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        confirmCallback = onConfirm;
+        document.getElementById('confirmModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeConfirmModal() {
+        document.getElementById('confirmModal').classList.remove('active');
+        document.body.style.overflow = '';
+        confirmCallback = null;
+    }
+
+    function closeConfirmModalOnOverlay(event) {
+        if (event.target === event.currentTarget) {
+            closeConfirmModal();
+        }
+    }
+
+    document.getElementById('confirmBtn').addEventListener('click', () => {
+        if (confirmCallback) {
+            confirmCallback();
+        }
+        closeConfirmModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeConfirmModal();
+        }
+    });
+    </script>
+
+    <!-- COLOR PICKER MODAL -->
+    <div class="color-picker-overlay" id="colorPickerModal">
+        <div class="color-picker-dialog">
+            <div class="cp-header">
+                <h3 class="cp-title">Выбор цвета категории</h3>
+                <button class="cp-close" onclick="closeColorPicker()">&times;</button>
+            </div>
+
+            <div class="cp-body">
+                <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                    <!-- Вертикальный ползунок оттенка -->
+                    <div class="cp-hue-vertical" id="cpHueVertical" style="width: 30px; height: 200px; border-radius: var(--radius-md); cursor: pointer; position: relative; background: linear-gradient(to bottom, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000); border: 1px solid var(--border-primary);">
+                        <div class="cp-hue-cursor-vertical" id="cpHueCursorVertical" style="position: absolute; left: -4px; right: -4px; height: 6px; background: white; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.5); pointer-events: none; transform: translateY(-50%);"></div>
+                    </div>
+
+                    <!-- Поле выбора цвета -->
+                    <div class="cp-gradient-area" id="cpGradientArea" style="flex: 1; height: 200px; position: relative; border-radius: var(--radius-md); cursor: crosshair; overflow: hidden; border: 1px solid var(--border-primary);">
+                        <div class="cp-cursor" id="cpCursor" style="position: absolute; width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px black; transform: translate(-50%, -50%); pointer-events: none; z-index: 10;"></div>
+                    </div>
+
+                    <!-- Блок предпросмотра -->
+                    <div class="cp-preview-block" style="width: 30px; height: 200px;">
+                        <div class="cp-preview-box" id="cpPreviewBox" style="width: 100%; height: 100%; border-radius: var(--radius-md); border: 2px solid var(--border-primary); box-shadow: 0 0 20px rgba(0,0,0,0.3); transition: all 0.1s ease;"></div>
+                    </div>
+                </div>
+
+                <div class="cp-inputs">
+                    <div class="cp-input-group">
+                        <label>HEX</label>
+                        <input type="text" id="cpHexInput" placeholder="#FF7A00" maxlength="7">
+                    </div>
+                    <div class="cp-rgb-group">
+                        <div class="cp-input-group">
+                            <label>R</label>
+                            <input type="number" id="cpRInput" min="0" max="255">
+                        </div>
+                        <div class="cp-input-group">
+                            <label>G</label>
+                            <input type="number" id="cpGInput" min="0" max="255">
+                        </div>
+                        <div class="cp-input-group">
+                            <label>B</label>
+                            <input type="number" id="cpBInput" min="0" max="255">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cp-footer">
+                <button class="btn btn-secondary" onclick="closeColorPicker()">Отмена</button>
+                <button class="btn btn-primary" onclick="confirmColor()">Выбрать цвет</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" id="selectedCategoryColor" value="#ff7a00">
+
+    <script>
+    // Color Picker
+    const ColorPicker = {
+        hue: 24,
+        sat: 100,
+        val: 100,
+        els: {},
+        isDraggingGradient: false,
+        isDraggingHue: false,
+        onSelectCallback: null,
+
+        init() {
+            this.els = {
+                modal: document.getElementById('colorPickerModal'),
+                gradientArea: document.getElementById('cpGradientArea'),
+                cursor: document.getElementById('cpCursor'),
+                hueVertical: document.getElementById('cpHueVertical'),
+                hueCursorVertical: document.getElementById('cpHueCursorVertical'),
+                hex: document.getElementById('cpHexInput'),
+                r: document.getElementById('cpRInput'),
+                g: document.getElementById('cpGInput'),
+                b: document.getElementById('cpBInput'),
+                previewBox: document.getElementById('cpPreviewBox')
+            };
+
+            this.bindEvents();
+            this.updateGradientBackground();
+            this.setColor(24, 100, 100);
+        },
+
+        bindEvents() {
+            this.els.gradientArea.addEventListener('mousedown', (e) => {
+                this.isDraggingGradient = true;
+                this.updateFromGradient(e);
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (this.isDraggingGradient) this.updateFromGradient(e);
+                if (this.isDraggingHue) this.updateFromHue(e);
+            });
+
+            document.addEventListener('mouseup', () => {
+                this.isDraggingGradient = false;
+                this.isDraggingHue = false;
+            });
+
+            this.els.hueVertical.addEventListener('mousedown', (e) => {
+                this.isDraggingHue = true;
+                this.updateFromHue(e);
+                e.preventDefault();
+            });
+
+            this.els.hex.addEventListener('input', () => {
+                let hex = this.els.hex.value.trim();
+                if (!hex.startsWith('#')) hex = '#' + hex;
+                if (/^#[0-9A-F]{6}$/i.test(hex)) {
+                    const rgb = this.hexToRgb(hex);
+                    if (rgb) {
+                        const hsv = this.rgbToHsv(rgb.r, rgb.g, rgb.b);
+                        this.hue = hsv.h;
+                        this.sat = hsv.s;
+                        this.val = hsv.v;
+                        this.updateUI();
+                    }
+                }
+            });
+
+            ['r', 'g', 'b'].forEach(ch => {
+                this.els[ch].addEventListener('input', () => {
+                    const r = parseInt(this.els.r.value) || 0;
+                    const g = parseInt(this.els.g.value) || 0;
+                    const b = parseInt(this.els.b.value) || 0;
+                    const hsv = this.rgbToHsv(r, g, b);
+                    this.hue = hsv.h;
+                    this.sat = hsv.s;
+                    this.val = hsv.v;
+                    this.updateUI();
+                });
+            });
+
+            this.els.modal.addEventListener('click', (e) => {
+                if (e.target === this.els.modal) closeColorPicker();
+            });
+        },
+
+        updateGradientBackground() {
+            const hueColor = `hsl(${this.hue}, 100%, 50%)`;
+            this.els.gradientArea.style.background = `
+                linear-gradient(to right, white, ${hueColor}),
+                linear-gradient(to bottom, transparent, black)
+            `;
+            this.els.gradientArea.style.backgroundBlendMode = 'multiply';
+        },
+
+        updateFromGradient(e) {
+            const rect = this.els.gradientArea.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            x = Math.max(0, Math.min(x, rect.width));
+            y = Math.max(0, Math.min(y, rect.height));
+
+            this.sat = (x / rect.width) * 100;
+            this.val = 100 - (y / rect.height) * 100;
+
+            this.sat = Math.max(0, Math.min(100, this.sat));
+            this.val = Math.max(0, Math.min(100, this.val));
+
+            this.updateUI();
+        },
+
+        updateFromHue(e) {
+            const rect = this.els.hueVertical.getBoundingClientRect();
+            let y = e.clientY - rect.top;
+            y = Math.max(0, Math.min(y, rect.height));
+
+            this.hue = (y / rect.height) * 360;
+            this.hue = Math.max(0, Math.min(360, this.hue));
+
+            this.updateUI();
+        },
+
+        updateUI() {
+            this.updateGradientBackground();
+
+            const rgb = this.hsvToRgb(this.hue, this.sat, this.val);
+            const hex = this.rgbToHex(rgb.r, rgb.g, rgb.b);
+
+            const gradientRect = this.els.gradientArea.getBoundingClientRect();
+            if (gradientRect.width > 0) {
+                const cursorX = (this.sat / 100) * gradientRect.width;
+                const cursorY = (1 - this.val / 100) * gradientRect.height;
+                this.els.cursor.style.left = `${cursorX}px`;
+                this.els.cursor.style.top = `${cursorY}px`;
+            }
+
+            const hueRect = this.els.hueVertical.getBoundingClientRect();
+            if (hueRect.height > 0) {
+                const hueY = (this.hue / 360) * hueRect.height;
+                this.els.hueCursorVertical.style.top = `${hueY}px`;
+            }
+
+            this.els.hex.value = hex.toUpperCase();
+            this.els.r.value = rgb.r;
+            this.els.g.value = rgb.g;
+            this.els.b.value = rgb.b;
+
+            if (this.els.previewBox) {
+                this.els.previewBox.style.background = hex;
+            }
+
+            document.getElementById('selectedCategoryColor').value = hex;
+        },
+
+        setColor(h, s, v) {
+            this.hue = h;
+            this.sat = s;
+            this.val = v;
+            this.updateUI();
+        },
+
+        hsvToRgb(h, s, v) {
+            h = Math.max(0, Math.min(360, h));
+            s = Math.max(0, Math.min(100, s)) / 100;
+            v = Math.max(0, Math.min(100, v)) / 100;
+
+            let r, g, b;
+            const i = Math.floor(h / 60);
+            const f = h / 60 - i;
+            const p = v * (1 - s);
+            const q = v * (1 - f * s);
+            const t = v * (1 - (1 - f) * s);
+
+            switch (i % 6) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+
+            return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+        },
+
+        rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            let h, s, v = max;
+            const d = max - min;
+            s = max === 0 ? 0 : d / max;
+
+            if (max === min) {
+                h = 0;
+            } else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    default: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+
+            return { h: h * 360, s: s * 100, v: v * 100 };
+        },
+
+        hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        },
+
+        rgbToHex(r, g, b) {
+            return '#' + [r, g, b].map(x => {
+                const hex = Math.max(0, Math.min(255, x)).toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        }
+    };
+
+    function openColorPicker(initialColor = '#ff7a00', callback = null) {
+        ColorPicker.onSelectCallback = callback;
+        const rgb = ColorPicker.hexToRgb(initialColor);
+        if (rgb) {
+            const hsv = ColorPicker.rgbToHsv(rgb.r, rgb.g, rgb.b);
+            ColorPicker.setColor(hsv.h, hsv.s, hsv.v);
+        }
+        ColorPicker.els.modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeColorPicker() {
+        ColorPicker.els.modal.classList.remove('active');
+        document.body.style.overflow = '';
+        ColorPicker.onSelectCallback = null;
+    }
+
+    function confirmColor() {
+        const color = document.getElementById('selectedCategoryColor').value;
+        if (ColorPicker.onSelectCallback) {
+            ColorPicker.onSelectCallback(color);
+        }
+        closeColorPicker();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => ColorPicker.init());
+    </script>
+
+    <!-- Модальное окно для переименования категории -->
+    <div class="modal-overlay" id="renameCategoryModal" onclick="closeRenameModalOnOverlay(event)">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Переименование категории</h3>
+                <button class="modal-close" onclick="closeRenameModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="renameCategoryForm">
+                    <div class="form-group">
+                        <label for="rename_category_name">Новое название</label>
+                        <input type="text" id="rename_category_name" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="confirmRename()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let renameCategoryId = null;
+    let renameCallback = null;
+
+    function openRenameModal(categoryId, currentName, callback) {
+        renameCategoryId = categoryId;
+        renameCallback = callback;
+        document.getElementById('rename_category_name').value = currentName;
+        document.getElementById('renameCategoryModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeRenameModal() {
+        document.getElementById('renameCategoryModal').classList.remove('active');
+        document.body.style.overflow = '';
+        renameCategoryId = null;
+        renameCallback = null;
+    }
+
+    function closeRenameModalOnOverlay(event) {
+        if (event.target === event.currentTarget) {
+            closeRenameModal();
+        }
+    }
+
+    function confirmRename() {
+        const newName = document.getElementById('rename_category_name').value.trim();
+        if (newName && renameCallback) {
+            renameCallback(renameCategoryId, newName);
+        }
+        closeRenameModal();
+    }
+    </script>
+
+    <!-- Модальное окно для удаления категории с детьми -->
+    <div class="modal-overlay" id="deleteCategoryModal" onclick="closeDeleteCategoryModalOnOverlay(event)">
+        <div class="modal" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="deleteCategoryTitle">Удаление категории</h3>
+                <button class="modal-close" onclick="closeDeleteCategoryModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteCategoryMessage" class="text-secondary">У этой категории есть подкатегории.</p>
+                <div class="form-group mt-3">
+                    <label>Выберите действие:</label>
+                    <select id="deleteCategoryAction" class="mt-2">
+                        <option value="delete_children">Удалить категорию со всеми подкатегориями</option>
+                        <option value="move_to_parent">Удалить категорию, подкатегории сделать корневыми</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteCategoryModal()">Отмена</button>
+                <button class="btn btn-danger" id="deleteCategoryConfirmBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let deleteCategoryId = null;
+    let deleteCategoryCallback = null;
+
+    function showDeleteCategoryModal(categoryId, hasChildren, callback) {
+        deleteCategoryId = categoryId;
+        deleteCategoryCallback = callback;
+
+        const messageEl = document.getElementById('deleteCategoryMessage');
+        const actionSelect = document.getElementById('deleteCategoryAction');
+
+        if (hasChildren) {
+            messageEl.textContent = 'У этой категории есть подкатегории. Выберите действие:';
+            actionSelect.style.display = 'block';
+            actionSelect.disabled = false;
+        } else {
+            messageEl.textContent = 'Удалить эту категорию?';
+            actionSelect.style.display = 'none';
+            actionSelect.disabled = true;
+        }
+
+        document.getElementById('deleteCategoryModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeDeleteCategoryModal() {
+        document.getElementById('deleteCategoryModal').classList.remove('active');
+        document.body.style.overflow = '';
+        deleteCategoryId = null;
+        deleteCategoryCallback = null;
+    }
+
+    function closeDeleteCategoryModalOnOverlay(event) {
+        if (event.target === event.currentTarget) {
+            closeDeleteCategoryModal();
+        }
+    }
+
+    document.getElementById('deleteCategoryConfirmBtn').addEventListener('click', function() {
+        if (deleteCategoryCallback) {
+            const action = document.getElementById('deleteCategoryAction').value;
+            deleteCategoryCallback(deleteCategoryId, action);
+        }
+        closeDeleteCategoryModal();
+    });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

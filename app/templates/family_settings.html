@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Управление семьёй - FamilyBudget{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-4">
+    <!-- Информация о семье -->
+    <div class="card">
+        <h3 class="card-title">Информация о семье</h3>
+        <div class="stat-value" style="font-size: 1.8rem;">{{ family.name }}</div>
+        <div class="text-secondary">Создана: {{ family.created_at.strftime('%d.%m.%Y') }}</div>
+
+        {% if current_user.role == 'Создатель' or current_user.role == 'Администратор' %}
+        <div class="mt-3">
+            <label class="text-secondary" style="display: block; margin-bottom: 8px;">Создать новый код приглашения</label>
+            <button class="btn btn-primary" onclick="generateInvite()">Сгенерировать код</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Участники -->
+    <div class="card">
+        <h3 class="card-title">Участники семьи</h3>
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ФИО</th>
+                            <th>Роль</th>
+                            <th>Дата регистрации</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for member in members %}
+                        <tr>
+                            <td>{{ member.surname }} {{ member.name }} {{ member.patronymic or '' }}</td>
+                            <td>
+                                {% if member.id == current_user.id %}
+                                    <span class="badge {% if member.role == 'Создатель' %}badge-accent{% elif member.role == 'Администратор' %}badge-warning{% else %}badge-success{% endif %}">
+                                        {{ member.role }}
+                                    </span>
+                                {% else %}
+                                    {% if current_user.role == 'Создатель' %}
+                                    <select onchange="changeRole({{ member.id }}, this.value)" class="role-select" style="background: var(--bg-secondary); padding: 4px 8px; border-radius: var(--radius-sm);">
+                                        <option value="Участник" {% if member.role == 'Участник' %}selected{% endif %}>Участник</option>
+                                        <option value="Администратор" {% if member.role == 'Администратор' %}selected{% endif %}>Администратор</option>
+                                    </select>
+                                    {% else %}
+                                    <span class="badge {% if member.role == 'Создатель' %}badge-accent{% elif member.role == 'Администратор' %}badge-warning{% else %}badge-success{% endif %}">
+                                        {{ member.role }}
+                                    </span>
+                                    {% endif %}
+                                {% endif %}
+                             </td>
+                            <td>{{ member.reg_date.strftime('%d.%m.%Y') }}</td>
+                            <td>
+                                {% if member.id != current_user.id %}
+                                    {% if current_user.role == 'Создатель' %}
+                                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem; margin-right: 8px;" onclick="removeMember({{ member.id }})">Исключить</button>
+                                        {% if member.role != 'Создатель' %}
+                                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="transferOwnership({{ member.id }})">Назначить создателем</button>
+                                        {% endif %}
+                                    {% elif current_user.role == 'Администратор' and member.role == 'Участник' %}
+                                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="removeMember({{ member.id }})">Исключить</button>
+                                    {% endif %}
+                                {% else %}
+                                    <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="leaveFamily()">Покинуть</button>
+                                {% endif %}
+                             </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Активные приглашения -->
+<div class="card mb-4">
+    <h3 class="card-title">Активные приглашения</h3>
+    <div class="table-container">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Код приглашения</th>
+                        <th>Дата истечения</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invite in active_invites %}
+                    <tr>
+                        <td><code style="background: var(--bg-secondary); padding: 4px 8px; border-radius: 8px; font-family: monospace;">{{ invite.code }}</code></td>
+                        <td>{{ invite.expires_at.strftime('%d.%m.%Y %H:%M') if invite.expires_at else '—' }}</td>
+                        <td>
+                            <button class="copy-btn" onclick="copyToClipboard('{{ invite.code }}', this)" title="Скопировать код">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            </button>
+                            <button class="delete-invite-btn" onclick="deleteInvite({{ invite.id }})" title="Отозвать приглашение">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 6L6 18"></path>
+                                    <path d="M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                         </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="text-center text-secondary">Нет активных приглашений</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- История приглашений -->
+<div class="card">
+    <h3 class="card-title">История приглашений</h3>
+    <div class="table-container">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Код приглашения</th>
+                        <th>Статус</th>
+                        <th>Дата истечения</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invite in old_invitations %}
+                    <tr>
+                        <td><code>{{ invite.code }}</code></td>
+                        <td>
+                            <span class="badge badge-{{ 'warning' if invite.status == 'Ожидает' else 'success' if invite.status == 'Принят' else 'error' }}">
+                                {{ invite.status }}
+                            </span>
+                        </td>
+                        <td>{{ invite.expires_at.strftime('%d.%m.%Y %H:%M') if invite.expires_at else '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="text-center text-secondary">Нет истории приглашений</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+.role-select {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.role-select:hover {
+    border-color: var(--accent-primary);
+}
+.copy-btn, .delete-invite-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    margin: 0 2px;
+}
+.copy-btn:hover {
+    color: var(--success);
+    background: var(--bg-hover);
+}
+.delete-invite-btn:hover {
+    color: var(--error);
+    background: var(--bg-hover);
+}
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changeRole(userId, newRole) {
+    fetch('{{ url_for("main.change_member_role") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, role: newRole })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlash('Роль изменена', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    });
+}
+
+function transferOwnership(userId) {
+    showConfirm(
+        'Передать права создателя этому участнику? Вы станете администратором.',
+        'Передача прав',
+        function() {
+            fetch('{{ url_for("main.transfer_ownership") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_creator_id: userId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Права создателя переданы', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        }
+    );
+}
+
+function leaveFamily() {
+    showConfirm(
+        'Вы уверены, что хотите покинуть семью?',
+        'Выход из семьи',
+        function() {
+            fetch('{{ url_for("main.leave_family") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.family_deleted) {
+                        showFlash('Семья удалена, так как вы были последним участником', 'success');
+                    } else {
+                        showFlash('Вы покинули семью', 'success');
+                    }
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        }
+    );
+}
+
+function generateInvite() {
+    fetch('{{ url_for("main.generate_invite") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.code) {
+            showFlash('Код приглашения создан: ' + data.code, 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    });
+}
+
+function deleteInvite(inviteId) {
+    showConfirm(
+        'Отозвать приглашение? Код станет недействительным.',
+        'Отзыв приглашения',
+        function() {
+            fetch(`/invite/${inviteId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Приглашение отозвано', 'success');
+                    location.reload();
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        }
+    );
+}
+
+function removeMember(userId) {
+    showConfirm(
+        'Вы уверены, что хотите исключить участника из семьи?',
+        'Исключение участника',
+        function() {
+            fetch('{{ url_for("main.remove_member") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Участник исключён из семьи', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        }
+    );
+}
+
+function copyToClipboard(text, btnElement) {
+    navigator.clipboard.writeText(text).then(() => {
+        showFlash('Код скопирован в буфер обмена', 'success');
+        btnElement.style.color = 'var(--success)';
+        setTimeout(() => {
+            btnElement.style.color = '';
+        }, 500);
+    }).catch(err => {
+        showFlash('Не удалось скопировать код', 'danger');
+    });
+}
+</script>
+{% endblock %}

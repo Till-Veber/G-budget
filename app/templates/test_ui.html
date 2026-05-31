@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FamilyBudget - Система управления семейным бюджетом</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tooltip = document.getElementById('donut-tooltip');
+    const segments = document.querySelectorAll('.donut-segment');
+
+    segments.forEach(seg => {
+        seg.addEventListener('mouseenter', (e) => {
+            const name = seg.dataset.name || 'Категория';
+            const value = seg.dataset.value || '0 ₽';
+            tooltip.innerHTML = `<div class="tooltip-name">${name}</div><div class="tooltip-value">${value}</div>`;
+            tooltip.classList.add('visible');
+        });
+
+        seg.addEventListener('mousemove', (e) => {
+            // Позиционирование относительно курсора с отступом
+            let x = e.clientX + 16;
+            let y = e.clientY - 16;
+
+            // Защита от выхода за правый/нижний край экрана
+            const tw = tooltip.offsetWidth;
+            const th = tooltip.offsetHeight;
+            if (x + tw > window.innerWidth) x = e.clientX - tw - 16;
+            if (y + th > window.innerHeight) y = e.clientY - th - 16;
+
+            tooltip.style.left = `${x}px`;
+            tooltip.style.top = `${y}px`;
+        });
+
+        seg.addEventListener('mouseleave', () => {
+            tooltip.classList.remove('visible');
+        });
+    });
+});
+</script>
+<body>
+    <!-- Анимированный фон (частицы) -->
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- Экран загрузки -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loader"></div>
+        <div class="loader-text">Загрузка системы</div>
+    </div>
+
+    <!-- Навигация -->
+    <nav class="navbar" id="navbar">
+        <div class="container nav-inner">
+            <a href="#" class="logo">FamilyBudget</a>
+            <div class="nav-links">
+                <a href="#" class="nav-link active">Дашборд</a>
+                <a href="#" class="nav-link">Транзакции</a>
+                <a href="#" class="nav-link">Категории</a>
+                <a href="#" class="nav-link">Отчёты</a>
+                <a href="#" class="nav-link">Семья</a>
+                <a href="#" class="nav-link">Выход</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Основной контент -->
+    <main class="container mt-4">
+        <!-- Уведомления -->
+        <div class="alerts-container">
+            <div class="alert alert-success">
+                <strong>Успешно!</strong> Транзакция сохранена в базе данных
+            </div>
+            <div class="alert alert-warning">
+                <strong>Внимание!</strong> Превышен лимит по категории "Продукты"
+            </div>
+        </div>
+
+        <!-- Карточки статистики -->
+        <div class="grid-3 mb-4">
+            <div class="stat-card">
+                <div class="stat-label">Общий баланс</div>
+                <div class="stat-value">42 500</div>
+                <div class="stat-change">+12% за месяц</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Расходы в этом месяце</div>
+                <div class="stat-value">18 320</div>
+                <div class="progress-container">
+                    <div class="progress-label">
+                        <span>Использовано</span>
+                        <span>65%</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar warning" style="width: 65%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Участников семьи</div>
+                <div class="stat-value">4</div>
+                <div style="margin-top: 12px;">
+                    <span class="badge badge-accent">Администратор</span>
+                    <span class="badge badge-success">Участник</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Основная сетка -->
+        <div class="grid-2 mb-4">
+            <!-- Форма добавления транзакции -->
+            <div class="card">
+                <h3 class="card-title">Добавить операцию</h3>
+                <form id="transactionForm">
+                    <div class="form-group">
+                        <label for="type">Тип операции</label>
+                        <select id="type" name="type">
+                            <option value="expense">Расход</option>
+                            <option value="income">Доход</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="category">Категория</label>
+                        <select id="category" name="category">
+                            <option value="1">Продукты</option>
+                            <option value="2">Транспорт</option>
+                            <option value="3">Коммунальные услуги</option>
+                            <option value="4">Развлечения</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="amount">Сумма</label>
+                            <div class="number-input-wrapper">
+                                <button type="button" class="btn-number" onclick="changeAmount(-1)" aria-label="Уменьшить">−</button>
+                                <input type="number" id="amount" name="amount" placeholder="0" step="1" min="0" value="0">
+                                <button type="button" class="btn-number" onclick="changeAmount(1)" aria-label="Прибавить">+</button>
+                            </div>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="date">Дата</label>
+                            <input type="date" id="date" name="date">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="comment">Комментарий</label>
+                        <textarea id="comment" name="comment" placeholder="Описание операции..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">
+                        Сохранить транзакцию
+                    </button>
+                </form>
+            </div>
+
+            <!-- Последние транзакции -->
+            <div class="card">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="card-title" style="margin: 0;">Последние операции</h3>
+                    <button class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem;">
+                        Все транзакции
+                    </button>
+                </div>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Категория</th>
+                                    <th>Сумма</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>29.05.2026</td>
+                                    <td>Продукты</td>
+                                    <td style="color: var(--error); font-weight: 600;">-1 250</td>
+                                    <td><span class="badge badge-warning">Лимит</span></td>
+                                </tr>
+                                <tr>
+                                    <td>28.05.2026</td>
+                                    <td>Зарплата</td>
+                                    <td style="color: var(--success); font-weight: 600;">+85 000</td>
+                                    <td><span class="badge badge-success">OK</span></td>
+                                </tr>
+                                <tr>
+                                    <td>27.05.2026</td>
+                                    <td>Транспорт</td>
+                                    <td style="color: var(--error); font-weight: 600;">-320</td>
+                                    <td><span class="badge badge-success">OK</span></td>
+                                </tr>
+                                <tr>
+                                    <td>26.05.2026</td>
+                                    <td>Развлечения</td>
+                                    <td style="color: var(--error); font-weight: 600;">-2 100</td>
+                                    <td><span class="badge badge-success">OK</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- БЛОК ДИАГРАММЫ (КРУПНЫЙ) -->
+            <div class="card chart-container">
+                <h3 class="card-title">Распределение расходов</h3>
+                <div class="donut-chart-wrapper">
+                    <!-- viewBox 500x500 дает огромный запас места для свечения -->
+                    <svg class="donut-chart" viewBox="0 0 500 500">
+                        <g transform="rotate(-90 250 250)">
+                            <!-- Продукты: 40% (Оранжевый) -->
+                            <circle class="donut-segment seg-orange" cx="250" cy="250" r="180" fill="none" stroke="#ff7a00" stroke-width="40" data-length="452.39" data-offset="0" data-name="Продукты" data-value="7 328 ₽ (40%)" />
+
+                            <!-- Транспорт: 20% (Зеленый) -->
+                            <circle class="donut-segment seg-green" cx="250" cy="250" r="180" fill="none" stroke="#10b981" stroke-width="40" data-length="226.19" data-offset="-452.39" data-name="Транспорт" data-value="3 664 ₽ (20%)" />
+
+                            <!-- Коммунальные: 15% (Синий) -->
+                            <circle class="donut-segment seg-blue" cx="250" cy="250" r="180" fill="none" stroke="#3b82f6" stroke-width="40" data-length="169.65" data-offset="-678.58" data-name="Коммунальные" data-value="2 748 ₽ (15%)" />
+
+                            <!-- Развлечения: 25% (Фиолетовый) -->
+                            <circle class="donut-segment seg-purple" cx="250" cy="250" r="180" fill="none" stroke="#8b5cf6" stroke-width="40" data-length="282.74" data-offset="-848.23" data-name="Развлечения" data-value="4 580 ₽ (25%)" />
+                        </g>
+                        <!-- Текст в центре -->
+                        <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em">18 320 ₽</text>
+                    </svg>
+
+                    <div class="chart-legend">
+                        <div class="legend-item"><span class="legend-color" style="background: #ff7a00;"></span> Продукты (40%)</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #10b981;"></span> Транспорт (20%)</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #3b82f6;"></span> Коммунальные (15%)</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #8b5cf6;"></span> Развлечения (25%)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Контроль лимитов -->
+        <div class="card mb-4">
+            <h3 class="card-title">Контроль лимитов</h3>
+            <div class="grid-3">
+                <div>
+                    <div class="progress-label">
+                        <span>Продукты</span>
+                        <span>15 000 / 20 000</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" style="width: 75%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="progress-label">
+                        <span>Транспорт</span>
+                        <span>4 500 / 5 000</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar warning" style="width: 90%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="progress-label">
+                        <span>Развлечения</span>
+                        <span>8 200 / 10 000</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" style="width: 82%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопки действий -->
+        <div class="flex gap-2 mb-4">
+            <button class="btn btn-primary" onclick="openModal()">
+                Настроить лимит
+            </button>
+            <button class="btn btn-secondary">
+                Экспорт отчёта
+            </button>
+            <button class="btn btn-outline">
+                Добавить категорию
+            </button>
+        </div>
+        <!-- БЛОК ВЫБОРА ЦВЕТА КАТЕГОРИИ (в форме) -->
+        <div class="form-group">
+            <label>Цвет категории</label>
+            <div class="color-selector-wrapper">
+                <div class="color-preview-small" id="categoryColorDisplay" style="background: #ff7a00;"></div>
+                <button type="button" class="btn btn-secondary" onclick="openColorPicker('#ff7a00')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>
+                    Выбрать цвет
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Модальное окно -->
+    <div class="modal-overlay" id="modal" onclick="closeModalOnOverlay(event)">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Установка лимита</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="limitForm">
+                    <div class="form-group">
+                        <label for="limitCategory">Категория</label>
+                        <select id="limitCategory" name="category">
+                            <option value="1">Продукты</option>
+                            <option value="2">Транспорт</option>
+                            <option value="3">Коммунальные услуги</option>
+                            <option value="4">Развлечения</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="limitAmount">Лимит суммы</label>
+                        <input type="number" id="limitAmount" name="amount" placeholder="20 000" step="1" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="limitPeriod">Период</label>
+                        <select id="limitPeriod" name="period">
+                            <option value="month">Месяц</option>
+                            <option value="week">Неделя</option>
+                            <option value="year">Год</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveLimit()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Скрипты -->
+    <script>
+        // ==================== АНИМАЦИЯ ФОНА (ЧАСТИЦЫ) ====================
+        const canvas = document.getElementById('particles-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let particlesArray;
+        let animationId;
+
+        const mouse = {
+            x: null,
+            y: null,
+            radius: 150
+        };
+
+        // Функция для установки правильных размеров canvas с учетом devicePixelRatio
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+
+            // Устанавливаем внутренние размеры canvas с учетом DPR
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+
+            // Масштабируем контекст
+            ctx.scale(dpr, dpr);
+
+            // Пересчитываем количество частиц
+            init();
+        }
+
+        // Функция для получения координат мыши относительно canvas
+        function getMousePos(event) {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+
+            return {
+                x: (event.clientX - rect.left),
+                y: (event.clientY - rect.top)
+            };
+        }
+
+        window.addEventListener('mousemove', (event) => {
+            const pos = getMousePos(event);
+            mouse.x = pos.x;
+            mouse.y = pos.y;
+        });
+
+        class Particle {
+            constructor(x, y, directionX, directionY, size, color) {
+                this.x = x;
+                this.y = y;
+                this.directionX = directionX;
+                this.directionY = directionY;
+                this.size = size;
+                this.color = color;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+
+            update() {
+                // Проверяем границы с учетом текущих размеров canvas
+                const rect = canvas.getBoundingClientRect();
+
+                if (this.x > rect.width || this.x < 0) {
+                    this.directionX = -this.directionX;
+                }
+                if (this.y > rect.height || this.y < 0) {
+                    this.directionY = -this.directionY;
+                }
+
+                this.x += this.directionX;
+                this.y += this.directionY;
+                this.draw();
+            }
+        }
+
+        function init() {
+            particlesArray = [];
+            const rect = canvas.getBoundingClientRect();
+            let numberOfParticles = (rect.width * rect.height) / 9000;
+
+            for (let i = 0; i < numberOfParticles; i++) {
+                let size = (Math.random() * 2) + 1;
+                let x = (Math.random() * ((rect.width - size * 2) - (size * 2)) + size * 2);
+                let y = (Math.random() * ((rect.height - size * 2) - (size * 2)) + size * 2);
+                let directionX = (Math.random() * 1.2) - 0.6;
+                let directionY = (Math.random() * 1.2) - 0.6;
+                let color = '#ffffff';
+                particlesArray.push(new Particle(x, y, directionX, directionY, size, color));
+            }
+        }
+
+        function connect() {
+            const rect = canvas.getBoundingClientRect();
+            let opacityValue = 1;
+
+            for (let a = 0; a < particlesArray.length; a++) {
+                for (let b = a; b < particlesArray.length; b++) {
+                    let distance = ((particlesArray[a].x - particlesArray[b].x) * (particlesArray[a].x - particlesArray[b].x)) +
+                                   ((particlesArray[a].y - particlesArray[b].y) * (particlesArray[a].y - particlesArray[b].y));
+
+                    if (distance < (rect.width / 7) * (rect.height / 7)) {
+                        opacityValue = 1 - (distance / 20000);
+                        ctx.strokeStyle = 'rgba(255, 255, 255,' + opacityValue * 0.1 + ')';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                        ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                        ctx.stroke();
+                    }
+                }
+
+                if (mouse.x != null) {
+                    let mouseDistance = ((particlesArray[a].x - mouse.x) * (particlesArray[a].x - mouse.x)) +
+                                        ((particlesArray[a].y - mouse.y) * (particlesArray[a].y - mouse.y));
+                    if (mouseDistance < 20000) {
+                        ctx.strokeStyle = 'rgba(255, 122, 0,' + (1 - mouseDistance/20000) + ')';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                        ctx.lineTo(mouse.x, mouse.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function animate() {
+            const rect = canvas.getBoundingClientRect();
+            animationId = requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, rect.width, rect.height);
+
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update();
+            }
+            connect();
+        }
+
+        // Обработчик изменения размера окна
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            // Очищаем предыдущий таймер
+            clearTimeout(resizeTimeout);
+
+            // Устанавливаем новый таймер для оптимизации
+            resizeTimeout = setTimeout(() => {
+                // Сбрасываем масштаб контекста перед изменением размеров
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                resizeCanvas();
+            }, 100);
+        });
+
+        window.addEventListener('mouseout', () => {
+            mouse.x = undefined;
+            mouse.y = undefined;
+        });
+
+        // Инициализация при загрузке
+        resizeCanvas();
+        animate();
+
+        // Очистка при выгрузке страницы
+        window.addEventListener('beforeunload', () => {
+            cancelAnimationFrame(animationId);
+            clearTimeout(resizeTimeout);
+        });
+
+        // ==================== ИНТЕРФЕЙС ====================
+
+        // Экран загрузки
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('loadingScreen').classList.add('hidden');
+            }, 1000);
+        });
+
+        // Эффект прокрутки навигации
+        window.addEventListener('scroll', () => {
+            const navbar = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+        });
+
+        // Модальное окно
+        function openModal() {
+            document.getElementById('modal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function closeModalOnOverlay(event) {
+            if (event.target === event.currentTarget) {
+                closeModal();
+            }
+        }
+
+        function saveLimit() {
+            closeModal();
+            showAlert('Лимит успешно установлен', 'success');
+        }
+
+        // Система уведомлений
+        function showAlert(message, type = 'info') {
+            const alertsContainer = document.querySelector('.alerts-container') || document.querySelector('main .container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = message;
+            alertsContainer.insertBefore(alert, alertsContainer.firstChild);
+
+            setTimeout(() => {
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100%)';
+                setTimeout(() => alert.remove(), 400);
+            }, 5000);
+        }
+
+        // Кнопки +/- для суммы
+        function changeAmount(delta) {
+            const input = document.getElementById('amount');
+            let currentVal = parseFloat(input.value) || 0;
+            let newVal = currentVal + delta;
+
+            if (newVal < 0) newVal = 0;
+
+            input.value = newVal;
+
+            input.style.borderColor = 'var(--accent-primary)';
+            setTimeout(() => { input.style.borderColor = ''; }, 300);
+        }
+
+        // Отправка формы транзакции
+        document.getElementById('transactionForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const amount = document.getElementById('amount').value;
+            if(amount < 0) {
+                showAlert('Сумма не может быть отрицательной', 'error');
+                return;
+            }
+            showAlert('Транзакция успешно сохранена', 'success');
+            e.target.reset();
+        });
+
+        // Анимация прогресс-баров
+        window.addEventListener('load', () => {
+            const progressBars = document.querySelectorAll('.progress-bar');
+            progressBars.forEach(bar => {
+                const width = bar.style.width;
+                bar.style.width = '0';
+                setTimeout(() => {
+                    bar.style.width = width;
+                }, 300);
+            });
+        });
+
+        // Закрытие по Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Анимация полей ввода
+        document.querySelectorAll('input, select, textarea').forEach(input => {
+            input.addEventListener('focus', () => {
+                input.parentElement.classList.add('focused');
+            });
+            input.addEventListener('blur', () => {
+                input.parentElement.classList.remove('focused');
+            });
+        });
+
+        // Блокировка отрицательных значений
+        document.getElementById('amount').addEventListener('input', function(e) {
+            if (this.value < 0) this.value = 0;
+        });
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Длина окружности для R=180: 2 * PI * 180 ≈ 1130.97
+        const circumference = 1130.97;
+        const segments = document.querySelectorAll('.donut-segment');
+
+        segments.forEach((seg, i) => {
+            const targetLength = seg.getAttribute('data-length');
+            const targetOffset = seg.getAttribute('data-offset');
+
+            setTimeout(() => {
+                seg.style.transition = `
+                    stroke-dasharray 1s cubic-bezier(0.4, 0, 0.2, 1),
+                    stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1),
+                    stroke-width 0.3s ease,
+                    filter 0.3s ease
+                `;
+                seg.style.strokeDasharray = `${targetLength} ${circumference}`;
+                seg.style.strokeDashoffset = targetOffset;
+            }, 150 + (i * 120));
+        });
+    });
+    </script>
+    <div id="donut-tooltip" class="donut-tooltip"></div>
+
+
+
+    <!-- COLOR PICKER MODAL -->
+    <div class="color-picker-overlay" id="colorPickerModal">
+        <div class="color-picker-dialog">
+            <div class="cp-header">
+                <h3 class="cp-title">Выбор цвета категории</h3>
+                <button class="cp-close" onclick="closeColorPicker()">&times;</button>
+            </div>
+
+            <div class="cp-body">
+                <!-- Основной блок: ползунок оттенка + поле спектра + предпросмотр -->
+                <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                    <!-- Вертикальный ползунок оттенка -->
+                    <div class="cp-hue-vertical" id="cpHueVertical" style="width: 30px; height: 200px; border-radius: var(--radius-md); cursor: pointer; position: relative; background: linear-gradient(to bottom, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000); border: 1px solid var(--border-primary);">
+                        <div class="cp-hue-cursor-vertical" id="cpHueCursorVertical" style="position: absolute; left: -4px; right: -4px; height: 6px; background: white; border-radius: 3px; box-shadow: 0 0 6px rgba(0,0,0,0.5); pointer-events: none; transform: translateY(-50%);"></div>
+                    </div>
+
+                    <!-- Поле выбора цвета (насыщенность по X, яркость по Y) -->
+                    <div class="cp-gradient-area" id="cpGradientArea" style="flex: 1; height: 200px; position: relative; border-radius: var(--radius-md); cursor: crosshair; overflow: hidden; border: 1px solid var(--border-primary);">
+                        <div class="cp-cursor" id="cpCursor" style="position: absolute; width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px black; transform: translate(-50%, -50%); pointer-events: none; z-index: 10;"></div>
+                    </div>
+
+                    <!-- === БЛОК ПРЕДПРОСМОТРА ЦВЕТА === -->
+                    <div class="cp-preview-block" style="width: 30px; height: 200px;">
+                        <div class="cp-preview-box" id="cpPreviewBox" style="width: 100%; height: 100%; border-radius: var(--radius-md); border: 2px solid var(--border-primary); box-shadow: 0 0 20px rgba(0,0,0,0.3); transition: all 0.1s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Текстовые поля -->
+                <div class="cp-inputs">
+                    <div class="cp-input-group">
+                        <label>HEX</label>
+                        <input type="text" id="cpHexInput" placeholder="#FF7A00" maxlength="7">
+                    </div>
+                    <div class="cp-rgb-group">
+                        <div class="cp-input-group">
+                            <label>R</label>
+                            <input type="number" id="cpRInput" min="0" max="255">
+                        </div>
+                        <div class="cp-input-group">
+                            <label>G</label>
+                            <input type="number" id="cpGInput" min="0" max="255">
+                        </div>
+                        <div class="cp-input-group">
+                            <label>B</label>
+                            <input type="number" id="cpBInput" min="0" max="255">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cp-footer">
+                <button class="btn btn-secondary" onclick="closeColorPicker()">Отмена</button>
+                <button class="btn btn-primary" onclick="confirmColor()">Выбрать цвет</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" id="selectedCategoryColor" value="#ff7a00">
+
+    <script>
+    // ==================== ИСПРАВЛЕННЫЙ COLOR PICKER ====================
+    const ColorPicker = {
+        hue: 24,          // 0-360
+        sat: 100,         // 0-100 (насыщенность)
+        val: 100,         // 0-100 (яркость)
+        els: {},
+        isDraggingGradient: false,
+        isDraggingHue: false,
+
+        init() {
+            this.els = {
+                modal: document.getElementById('colorPickerModal'),
+                gradientArea: document.getElementById('cpGradientArea'),
+                cursor: document.getElementById('cpCursor'),
+                hueVertical: document.getElementById('cpHueVertical'),
+                hueCursorVertical: document.getElementById('cpHueCursorVertical'),
+                hex: document.getElementById('cpHexInput'),
+                r: document.getElementById('cpRInput'),
+                g: document.getElementById('cpGInput'),
+                b: document.getElementById('cpBInput'),
+                previewBox: document.getElementById('cpPreviewBox')
+            };
+
+            this.bindEvents();
+            this.updateGradientBackground(); // Установить начальный фон градиента
+            this.setColor(24, 100, 100);     // Оранжевый #ff7a00
+        },
+
+        bindEvents() {
+            // Drag на поле градиента (насыщенность/яркость)
+            this.els.gradientArea.addEventListener('mousedown', (e) => {
+                this.isDraggingGradient = true;
+                this.updateFromGradient(e);
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (this.isDraggingGradient) this.updateFromGradient(e);
+                if (this.isDraggingHue) this.updateFromHue(e);
+            });
+
+            document.addEventListener('mouseup', () => {
+                this.isDraggingGradient = false;
+                this.isDraggingHue = false;
+            });
+
+            // Drag на вертикальном ползунке оттенка
+            this.els.hueVertical.addEventListener('mousedown', (e) => {
+                this.isDraggingHue = true;
+                this.updateFromHue(e);
+                e.preventDefault();
+            });
+
+            // Ручной ввод HEX
+            this.els.hex.addEventListener('input', () => {
+                let hex = this.els.hex.value.trim();
+                if (!hex.startsWith('#')) hex = '#' + hex;
+                if (/^#[0-9A-F]{6}$/i.test(hex)) {
+                    const rgb = this.hexToRgb(hex);
+                    if (rgb) {
+                        const hsv = this.rgbToHsv(rgb.r, rgb.g, rgb.b);
+                        this.hue = hsv.h;
+                        this.sat = hsv.s;
+                        this.val = hsv.v;
+                        this.updateUI();
+                    }
+                }
+            });
+
+            // Ручной ввод RGB
+            ['r', 'g', 'b'].forEach(ch => {
+                this.els[ch].addEventListener('input', () => {
+                    const r = parseInt(this.els.r.value) || 0;
+                    const g = parseInt(this.els.g.value) || 0;
+                    const b = parseInt(this.els.b.value) || 0;
+                    const hsv = this.rgbToHsv(r, g, b);
+                    this.hue = hsv.h;
+                    this.sat = hsv.s;
+                    this.val = hsv.v;
+                    this.updateUI();
+                });
+            });
+
+            // Закрытие по клику на оверлей
+            this.els.modal.addEventListener('click', (e) => {
+                if (e.target === this.els.modal) closeColorPicker();
+            });
+        },
+
+        // Обновление фона градиента в зависимости от текущего оттенка
+        updateGradientBackground() {
+            // Получаем чистый цвет для текущего оттенка (макс. насыщенность и яркость)
+            const hueColor = `hsl(${this.hue}, 100%, 50%)`;
+
+            // Правильный градиент: по X - насыщенность (слева 0%, справа 100%)
+            // по Y - яркость (сверху 100%, снизу 0%)
+            this.els.gradientArea.style.background = `
+                linear-gradient(to right, white, ${hueColor}),
+                linear-gradient(to bottom, transparent, black)
+            `;
+            this.els.gradientArea.style.backgroundBlendMode = 'multiply';
+            this.els.gradientArea.style.backgroundSize = '100% 100%, 100% 100%';
+        },
+
+        updateFromGradient(e) {
+            const rect = this.els.gradientArea.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+            x = Math.max(0, Math.min(x, rect.width));
+            y = Math.max(0, Math.min(y, rect.height));
+
+            // Насыщенность: от 0 слева до 100 справа
+            this.sat = (x / rect.width) * 100;
+            // Яркость: от 100 сверху до 0 снизу
+            this.val = 100 - (y / rect.height) * 100;
+
+            // Ограничения
+            this.sat = Math.max(0, Math.min(100, this.sat));
+            this.val = Math.max(0, Math.min(100, this.val));
+
+            this.updateUI();
+        },
+
+        updateFromHue(e) {
+            const rect = this.els.hueVertical.getBoundingClientRect();
+            let y = e.clientY - rect.top;
+            y = Math.max(0, Math.min(y, rect.height));
+
+            // Оттенок от 0 до 360 в зависимости от положения по Y
+            this.hue = (y / rect.height) * 360;
+            this.hue = Math.max(0, Math.min(360, this.hue));
+
+            this.updateUI();
+        },
+
+        updateUI() {
+            // Обновить фон градиента при изменении оттенка
+            this.updateGradientBackground();
+
+            const rgb = this.hsvToRgb(this.hue, this.sat, this.val);
+            const hex = this.rgbToHex(rgb.r, rgb.g, rgb.b);
+            const cssColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
+            // Позиция курсора в поле градиента
+            const gradientRect = this.els.gradientArea.getBoundingClientRect();
+            if (gradientRect.width > 0) {
+                const cursorX = (this.sat / 100) * gradientRect.width;
+                const cursorY = (1 - this.val / 100) * gradientRect.height;
+                this.els.cursor.style.left = `${cursorX}px`;
+                this.els.cursor.style.top = `${cursorY}px`;
+            }
+
+            // Позиция курсора на вертикальном ползунке оттенка
+            const hueRect = this.els.hueVertical.getBoundingClientRect();
+            if (hueRect.height > 0) {
+                const hueY = (this.hue / 360) * hueRect.height;
+                this.els.hueCursorVertical.style.top = `${hueY}px`;
+            }
+
+            // Обновить текстовые поля
+            this.els.hex.value = hex.toUpperCase();
+            this.els.r.value = rgb.r;
+            this.els.g.value = rgb.g;
+            this.els.b.value = rgb.b;
+
+            // === НОВЫЙ КОД: ОБНОВЛЕНИЕ ПРЕДПРОСМОТРА ===
+            if (this.els.previewBox) {
+                this.els.previewBox.style.background = hex;
+                this.els.previewBox.style.boxShadow = `0 0 15px ${hex}80`;
+            }
+
+            // Сохранить выбранный цвет
+            document.getElementById('selectedCategoryColor').value = hex;
+        },
+
+        setColor(h, s, v) {
+            this.hue = h;
+            this.sat = s;
+            this.val = v;
+            this.updateUI();
+        },
+
+        hsvToRgb(h, s, v) {
+            h = Math.max(0, Math.min(360, h));
+            s = Math.max(0, Math.min(100, s)) / 100;
+            v = Math.max(0, Math.min(100, v)) / 100;
+
+            let r, g, b;
+            const i = Math.floor(h / 60);
+            const f = h / 60 - i;
+            const p = v * (1 - s);
+            const q = v * (1 - f * s);
+            const t = v * (1 - (1 - f) * s);
+
+            switch (i % 6) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+
+            return {
+                r: Math.round(r * 255),
+                g: Math.round(g * 255),
+                b: Math.round(b * 255)
+            };
+        },
+
+        rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            let h, s, v = max;
+            const d = max - min;
+            s = max === 0 ? 0 : d / max;
+
+            if (max === min) {
+                h = 0;
+            } else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    default: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+
+            return { h: h * 360, s: s * 100, v: v * 100 };
+        },
+
+        hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        },
+
+        rgbToHex(r, g, b) {
+            return '#' + [r, g, b].map(x => {
+                const hex = Math.max(0, Math.min(255, x)).toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        }
+    };
+
+    // Глобальные функции для работы с пикером
+    function openColorPicker(initialColor = '#ff7a00') {
+        const rgb = ColorPicker.hexToRgb(initialColor);
+        if (rgb) {
+            const hsv = ColorPicker.rgbToHsv(rgb.r, rgb.g, rgb.b);
+            ColorPicker.setColor(hsv.h, hsv.s, hsv.v);
+        }
+        ColorPicker.els.modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeColorPicker() {
+        ColorPicker.els.modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function confirmColor() {
+        const color = document.getElementById('selectedCategoryColor').value;
+        const display = document.getElementById('categoryColorDisplay');
+        if (display) {
+            display.style.background = color;
+            display.style.boxShadow = `0 2px 8px ${color}60`;
+        }
+        closeColorPicker();
+    }
+
+    // Инициализация при загрузке
+    document.addEventListener('DOMContentLoaded', () => ColorPicker.init());
+    </script>
+
+
+</body>
+</html>

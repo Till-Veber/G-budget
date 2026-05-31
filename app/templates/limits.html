@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Управление лимитами - FamilyBudget{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-4">
+    <!-- Личные лимиты -->
+    <div class="card">
+        <h3 class="card-title">Личные лимиты</h3>
+        <p class="text-secondary" style="font-size: 0.85rem; margin-bottom: 16px;">Лимиты на ваши личные расходы</p>
+        
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Категория</th>
+                            <th>Лимит</th>
+                            <th>Потрачено</th>
+                            <th>Прогресс</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for limit in personal_limits %}
+                        <tr class="{% if limit.is_exceeded %}limit-row-exceeded{% endif %}">
+                            <td>{{ limit.category_name }}</td>
+                            <td>{{ "%.2f"|format(limit.limit_amount) }} ₽</td>
+                            <td class="{% if limit.is_exceeded %}text-error font-bold{% endif %}">
+                                {{ "%.2f"|format(limit.spent) }} ₽
+                                {% if limit.is_exceeded %}
+                                <span class="exceeded-badge-small">+{{ "%.0f"|format(limit.spent - limit.limit_amount) }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="progress" style="width: 100px;">
+                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}"
+                                         style="width: {{ limit.percent }}%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="delete-txn-btn" onclick="editLimit('personal', {{ limit.category_id }}, {{ limit.limit_amount }})" title="Редактировать">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 3l4 4-7 7H10v-4l7-7z"></path>
+                                        <path d="M4 20h16"></path>
+                                    </svg>
+                                </button>
+                                <button class="delete-txn-btn" onclick="deleteLimit('personal', {{ limit.category_id }})" title="Удалить лимит">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M4 7h16"></path>
+                                        <path d="M10 11v6"></path>
+                                        <path d="M14 11v6"></path>
+                                        <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12"></path>
+                                        <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <button class="btn btn-primary w-full" onclick="openLimitModal('personal')">+ Добавить личный лимит</button>
+        </div>
+    </div>
+
+    <!-- Семейные лимиты (только для создателя/администратора) -->
+    {% if current_user.role in ['Создатель', 'Администратор'] %}
+    <div class="card">
+        <h3 class="card-title">Семейные лимиты</h3>
+        <p class="text-secondary" style="font-size: 0.85rem; margin-bottom: 16px;">Общие лимиты для всей семьи</p>
+        
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Категория</th>
+                            <th>Лимит</th>
+                            <th>Потрачено</th>
+                            <th>Прогресс</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for limit in family_limits %}
+                        <tr>
+                            <td>{{ limit.category_name }}</td>
+                            <td>{{ "%.2f"|format(limit.limit_amount) }} ₽</td>
+                            <td>{{ "%.2f"|format(limit.spent) }} ₽</td>
+                            <td>
+                                <div class="progress" style="width: 100px;">
+                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %}" style="width: {{ limit.percent }}%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="delete-txn-btn" onclick="editLimit('family', {{ limit.category_id }}, {{ limit.limit_amount }})" title="Редактировать">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17 3l4 4-7 7H10v-4l7-7z"></path>
+                                        <path d="M4 20h16"></path>
+                                    </svg>
+                                </button>
+                                <button class="delete-txn-btn" onclick="deleteLimit('family', {{ limit.category_id }})" title="Удалить лимит">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M4 7h16"></path>
+                                        <path d="M10 11v6"></path>
+                                        <path d="M14 11v6"></path>
+                                        <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12"></path>
+                                        <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-secondary">Нет семейных лимитов</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <button class="btn btn-primary w-full" onclick="openLimitModal('family')">+ Добавить семейный лимит</button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Модальное окно для добавления/редактирования лимита -->
+<div class="modal-overlay" id="limitEditModal" onclick="closeLimitEditModalOnOverlay(event)">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title" id="limitEditTitle">Добавить лимит</h3>
+            <button class="modal-close" onclick="closeLimitEditModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="limitEditForm">
+                <div class="form-group">
+                    <label for="edit_limit_category_id">Категория</label>
+                    <select id="edit_limit_category_id" required>
+                        <option value="">Выберите категорию</option>
+                        {% for cat in expense_categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit_limit_amount">Лимит суммы</label>
+                    <input type="number" id="edit_limit_amount" step="0.01" min="0" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeLimitEditModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="saveLimitEdit()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.delete-txn-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.delete-txn-btn:hover {
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+.delete-txn-btn:active {
+    transform: scale(0.95);
+}
+.delete-txn-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+}
+.progress {
+    width: 100px;
+    height: 6px;
+}
+</style>
+
+<script>
+let currentLimitType = null;
+let currentEditCategoryId = null;
+
+function openLimitModal(type) {
+    currentLimitType = type;
+    currentEditCategoryId = null;
+    document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Добавить личный лимит' : 'Добавить семейный лимит';
+    document.getElementById('edit_limit_category_id').value = '';
+    document.getElementById('edit_limit_amount').value = '';
+    document.getElementById('limitEditModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function editLimit(type, categoryId, currentAmount) {
+    currentLimitType = type;
+    currentEditCategoryId = categoryId;
+    document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Редактировать личный лимит' : 'Редактировать семейный лимит';
+    document.getElementById('edit_limit_category_id').value = categoryId;
+    document.getElementById('edit_limit_amount').value = currentAmount;
+    document.getElementById('limitEditModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeLimitEditModal() {
+    document.getElementById('limitEditModal').classList.remove('active');
+    document.body.style.overflow = '';
+    currentLimitType = null;
+    currentEditCategoryId = null;
+}
+
+function closeLimitEditModalOnOverlay(event) {
+    if (event.target === event.currentTarget) {
+        closeLimitEditModal();
+    }
+}
+
+function saveLimitEdit() {
+    const categoryId = document.getElementById('edit_limit_category_id').value;
+    const amount = document.getElementById('edit_limit_amount').value;
+    
+    if (!categoryId || !amount) {
+        showFlash('Заполните все поля', 'warning');
+        return;
+    }
+    
+    const url = currentEditCategoryId 
+        ? '/set-limit'  // PUT через тот же маршрут
+        : '/set-limit';
+    
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            category_id: parseInt(categoryId),
+            limit_type: currentLimitType,
+            amount: parseFloat(amount)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlash('Лимит сохранён', 'success');
+            closeLimitEditModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    });
+}
+
+function deleteLimit(type, categoryId) {
+    showConfirm(
+        'Удалить лимит?',
+        'Удаление лимита',
+        function() {
+            fetch('/delete-limit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    limit_type: type,
+                    category_id: categoryId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Лимит удалён', 'success');
+                    location.reload();
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        }
+    );
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLimitEditModal();
+});
+</script>
+{% endblock %}

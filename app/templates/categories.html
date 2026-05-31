@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+
+{% block title %}Категории - FamilyBudget{% endblock %}
+
+{% block content %}
+<div class="grid-2 mb-4">
+    <div class="card">
+        <h3 class="card-title">Добавить категорию</h3>
+        <form id="addCategoryForm">
+            <div class="form-group">
+                <label for="cat_name">Название</label>
+                <input type="text" id="cat_name" required>
+            </div>
+            <div class="form-group">
+                <label for="cat_type">Тип</label>
+                <select id="cat_type">
+                    <option value="Расход">Расход</option>
+                    <option value="Доход">Доход</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="cat_parent">Родительская категория</label>
+                <select id="cat_parent">
+                    <option value="">— Корневая категория —</option>
+                    {% for cat in all_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }} ({{ cat.type }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Цвет категории</label>
+                <div class="color-selector-wrapper">
+                    <div class="color-preview-small" id="categoryColorDisplay" style="background: #ff7a00;"></div>
+                    <button type="button" class="btn btn-secondary" onclick="openColorPickerForCategory()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        </svg>
+                        Выбрать цвет
+                    </button>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-full">Создать категорию</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3 class="card-title">Список категорий</h3>
+        <p class="text-secondary" style="font-size: 0.8rem; margin-bottom: 16px;">Перетаскивайте категории для изменения вложенности</p>
+        <div class="category-tree" id="categoryTree"></div>
+    </div>
+</div>
+
+<style>
+.category-item {
+    margin: 8px 0;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    cursor: grab;
+    user-select: none;
+}
+.category-item:active {
+    cursor: grabbing;
+}
+.category-item.dragging {
+    opacity: 0.4;
+}
+.category-item.drag-over {
+    border: 2px dashed var(--accent-primary);
+    background: var(--bg-hover);
+}
+.category-item.drag-over-before {
+    border-top: 3px solid var(--accent-primary);
+}
+.category-item.drag-over-after {
+    border-bottom: 3px solid var(--accent-primary);
+}
+.category-children {
+    margin-left: 32px;
+    margin-top: 8px;
+    border-left: 2px solid var(--border-primary);
+    padding-left: 16px;
+}
+.category-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+.category-color-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid var(--border-primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.category-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+.category-actions {
+    display: flex;
+    gap: 8px;
+}
+.category-actions button {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.category-actions button:hover {
+    color: var(--accent-primary);
+    background: var(--bg-card);
+}
+.color-selector-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.color-preview-small {
+    width: 48px;
+    height: 40px;
+    border-radius: 8px;
+    border: 2px solid var(--border-primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: all 0.2s ease;
+}
+.color-preview-small:hover {
+    transform: scale(1.05);
+    border-color: var(--accent-primary);
+}
+.drag-placeholder {
+    height: 60px;
+    background: rgba(255, 122, 0, 0.15);
+    border: 2px dashed var(--accent-primary);
+    border-radius: var(--radius-md);
+    margin: 8px 0;
+}
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedColor = '#ff7a00';
+let draggedItem = null;
+let dragOverItem = null;
+let dragOverPosition = null;
+
+const categoryData = {{ categories | tojson | safe }};
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function renderCategoryHTML(cat, level = 0) {
+    // Сортируем детей по имени перед рендерингом
+    const sortedChildren = cat.children ? [...cat.children].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+    ) : [];
+
+    const hasChildren = sortedChildren.length > 0;
+
+    let html = `
+        <div class="category-item" data-id="${cat.id}" data-level="${level}" draggable="true">
+            <div class="category-info">
+                <div class="category-color-badge" style="background: ${cat.color};"></div>
+                <span class="category-name">${escapeHtml(cat.name)}</span>
+                <span class="badge badge-${cat.type === 'Расход' ? 'warning' : 'success'}">${cat.type}</span>
+            </div>
+            <div class="category-actions">
+                <button onclick="editCategoryColor(${cat.id}, '${cat.color}')" title="Изменить цвет">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>
+                </button>
+                <button onclick="editCategoryName(${cat.id}, '${escapeHtml(cat.name)}')" title="Переименовать">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 3l4 4-7 7H10v-4l7-7z"></path>
+                        <path d="M4 20h16"></path>
+                    </svg>
+                </button>
+                <button onclick="deleteCategory(${cat.id}, ${hasChildren})" title="Удалить">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18"></path>
+                        <path d="M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+
+    if (hasChildren) {
+        html += `<div class="category-children" data-parent-id="${cat.id}">`;
+        for (let child of sortedChildren) {
+            html += renderCategoryHTML(child, level + 1);
+        }
+        html += `</div>`;
+    }
+
+    return html;
+}
+
+// В начале renderTree() сортируем корневые категории
+function renderTree() {
+    const container = document.getElementById('categoryTree');
+    if (container && categoryData.length > 0) {
+        // Сортируем корневые категории по имени
+        const sortedRoot = [...categoryData].sort((a, b) =>
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        );
+
+        let html = '';
+        for (let cat of sortedRoot) {
+            html += renderCategoryHTML(cat, 0);
+        }
+        container.innerHTML = html;
+        initDragAndDrop();
+    } else if (container) {
+        container.innerHTML = '<div class="text-center text-secondary">Нет категорий</div>';
+    }
+}
+
+function initDragAndDrop() {
+    const draggables = document.querySelectorAll('.category-item');
+    const containers = document.querySelectorAll('.category-tree, .category-children');
+
+    draggables.forEach(draggable => {
+        draggable.addEventListener('dragstart', handleDragStart);
+        draggable.addEventListener('dragend', handleDragEnd);
+        draggable.addEventListener('dragover', handleDragOver);
+        draggable.addEventListener('dragleave', handleDragLeave);
+        draggable.addEventListener('drop', handleDrop);
+    });
+
+    containers.forEach(container => {
+        container.addEventListener('dragover', (e) => e.preventDefault());
+    });
+}
+
+let dragSourceId = null;
+
+function handleDragStart(e) {
+    dragSourceId = parseInt(e.target.closest('.category-item').dataset.id);
+    e.target.closest('.category-item').classList.add('dragging');
+    e.dataTransfer.setData('text/plain', dragSourceId);
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+    document.querySelectorAll('.category-item').forEach(el => {
+        el.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
+    });
+    dragSourceId = null;
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    const target = e.target.closest('.category-item');
+    if (!target || parseInt(target.dataset.id) === dragSourceId) return;
+
+    e.dataTransfer.dropEffect = 'move';
+
+    const rect = target.getBoundingClientRect();
+    const mouseY = e.clientY;
+    const threshold = rect.top + rect.height / 3;
+    const thresholdBottom = rect.bottom - rect.height / 3;
+
+    target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+
+    if (mouseY < threshold) {
+        target.classList.add('drag-over-before');
+        dragOverPosition = 'before';
+    } else if (mouseY > thresholdBottom) {
+        target.classList.add('drag-over-after');
+        dragOverPosition = 'after';
+    } else {
+        target.classList.add('drag-over');
+        dragOverPosition = 'inside';
+    }
+
+    dragOverItem = target;
+}
+
+function handleDragLeave(e) {
+    const target = e.target.closest('.category-item');
+    if (target) {
+        target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const targetItem = e.target.closest('.category-item');
+    if (!targetItem || !dragSourceId || parseInt(targetItem.dataset.id) === dragSourceId) return;
+
+    const targetId = parseInt(targetItem.dataset.id);
+    const position = dragOverPosition;
+
+    // Очищаем стили
+    document.querySelectorAll('.category-item').forEach(el => {
+        el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+    });
+
+    // Отправляем запрос на перемещение
+    fetch('/category/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            category_id: dragSourceId,
+            target_id: targetId,
+            position: position
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlash('Категория перемещена', 'success');
+            location.reload();
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showFlash('Ошибка сервера', 'danger');
+    });
+}
+
+function openColorPickerForCategory() {
+    openColorPicker(selectedColor, function(color) {
+        selectedColor = color;
+        document.getElementById('categoryColorDisplay').style.background = color;
+        document.getElementById('categoryColorDisplay').style.boxShadow = `0 2px 8px ${color}60`;
+    });
+}
+
+function openColorPickerForEdit(categoryId, currentColor) {
+    openColorPicker(currentColor, function(color) {
+        updateCategoryColor(categoryId, color);
+    });
+}
+
+function updateCategoryColor(id, color) {
+    fetch(`/category/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ color: color })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlash('Цвет категории обновлён', 'success');
+            location.reload();
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    });
+}
+
+// Добавление категории
+document.getElementById('addCategoryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const data = {
+        name: document.getElementById('cat_name').value,
+        type: document.getElementById('cat_type').value,
+        color: selectedColor,
+        parent_id: document.getElementById('cat_parent').value || null
+    };
+
+    fetch('{{ url_for("main.add_category") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.id) {
+            showFlash('Категория добавлена', 'success');
+            location.reload();
+        } else {
+            showFlash('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'danger');
+        }
+    })
+    .catch(error => {
+        showFlash('Ошибка сервера', 'danger');
+    });
+});
+
+function deleteCategory(id, hasChildren) {
+    showDeleteCategoryModal(id, hasChildren, function(categoryId, action) {
+        fetch(`/category/${categoryId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showFlash('Категория удалена', 'success');
+                location.reload();
+            } else {
+                showFlash('Ошибка: ' + data.error, 'danger');
+            }
+        });
+    });
+}
+
+function editCategoryName(id, currentName) {
+    openRenameModal(id, currentName, function(categoryId, newName) {
+        fetch(`/category/${categoryId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showFlash('Категория переименована', 'success');
+                location.reload();
+            } else {
+                showFlash('Ошибка: ' + data.error, 'danger');
+            }
+        });
+    });
+}
+
+function editCategoryColor(id, currentColor) {
+    openColorPicker(currentColor, function(color) {
+        fetch(`/category/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ color: color })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showFlash('Цвет категории изменён', 'success');
+                location.reload();
+            } else {
+                showFlash('Ошибка: ' + data.error, 'danger');
+            }
+        });
+    });
+}
+
+// Отрисовка дерева категорий
+document.addEventListener('DOMContentLoaded', function() {
+    renderTree();
+});
+</script>
+{% endblock %}

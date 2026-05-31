@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд - G-Budget{% endblock %}
+
+{% block content %}
+<!-- Карточки статистики (без изменений) -->
+<div class="grid-3 mb-4" style="gap: 24px">
+    <div class="stat-card">
+        <div class="stat-label">Общий баланс</div>
+        <div class="stat-value">{{ "%.2f"|format(balance) }}</div>
+        <div class="stat-change">
+            {% if balance_change >= 0 %}
+            +{{ "%.1f"|format(balance_change) }}% за месяц
+            {% else %}
+            {{ "%.1f"|format(balance_change) }}% за месяц
+            {% endif %}
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Расходы в этом месяце</div>
+        <div class="stat-value">{{ "%.2f"|format(month_expenses) }}</div>
+        {% if budget_limit %}
+        <div class="progress-container">
+            <div class="progress-label">
+                <span>Использовано</span>
+                <span>{{ expense_percent }}%</span>
+            </div>
+            <div class="progress">
+                <div class="progress-bar {% if expense_percent > 90 %}warning{% endif %}" style="width: {{ expense_percent }}%"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Участников семьи</div>
+        <div class="stat-value">{{ members_count }}</div>
+        <div class="stat-label">Ваша роль</div>
+        <div style="margin-top: 12px;">
+            {% if current_user.role == 'Создатель' %}
+            <span class="badge badge-accent">Создатель</span>
+            {% elif current_user.role == 'Администратор' %}
+            <span class="badge badge-warning">Администратор</span>
+            {% else %}
+            <span class="badge badge-success">Участник</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Основная сетка -->
+<div class="grid-2 mb-4">
+    <!-- Форма добавления транзакции (без изменений) -->
+    <div class="card">
+        <h3 class="card-title">Добавить операцию</h3>
+        <form method="POST" action="{{ url_for('main.add_transaction') }}">
+            <div class="form-group">
+                <label for="category_id">Категория</label>
+                <select id="category_id" name="category_id" required>
+                    <option value="">Выберите категорию</option>
+                    {% for cat in categories|sort(attribute='name') %}
+                    <option value="{{ cat.id }}" style="color: {{ cat.color }};">
+                        {{ cat.name }} ({{ cat.type }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="amount">Сумма</label>
+                <div class="number-input-wrapper">
+                    <button type="button" class="btn-number" onclick="changeAmount(-10)">−</button>
+                    <input type="number" id="amount" name="amount" placeholder="0" step="0.01" min="0" value="0.00">
+                    <button type="button" class="btn-number" onclick="changeAmount(10)">+</button>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <div class="form-group" style="flex: 1;">
+                    <label for="date">Дата</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="time">Время</label>
+                    <input type="time" id="time" name="time">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="comment">Комментарий</label>
+                <textarea id="comment" name="comment" placeholder="Описание операции..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary w-full">Сохранить транзакцию</button>
+        </form>
+    </div>
+
+    <!-- Последние транзакции (без изменений) -->
+    <div class="card">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="card-title" style="margin: 0;">Последние операции</h3>
+            <a href="{{ url_for('main.transactions') }}" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem;">Все транзакции</a>
+        </div>
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Категория</th>
+                            <th>Сумма</th>
+                            <th>Автор</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for txn in last_transactions %}
+                        <tr>
+                            <td>{{ txn.date.strftime('%d.%m.%Y') }}</td>
+                            <td style="color: {{ txn.category.color }};">{{ txn.category.name }}</td>
+                            <td style="color: {% if txn.category.type == 'Расход' %}var(--error){% else %}var(--success){% endif %}; font-weight: 600;">
+                                {% if txn.category.type == 'Расход' %}-{% else %}+{% endif %} {{ "%.2f"|format(txn.amount) }}
+                            </td>
+                            <td>{{ txn.author.surname }} {{ txn.author.name }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-secondary">Нет транзакций</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Диаграмма расходов (обновлённая) -->
+    <div class="card chart-container">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="card-title" style="margin: 0;">Распределение расходов</h3>
+            <div id="chartNavigation" style="display: flex; gap: 8px; align-items: center;">
+                <span id="currentCategoryPath" class="text-secondary" style="font-size: 0.85rem;"></span>
+                <button id="backButton" class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem; display: none;" onclick="goBack()">
+                    ← Назад
+                </button>
+            </div>
+        </div>
+        <div class="donut-chart-wrapper">
+            <svg class="donut-chart" viewBox="0 0 500 500" id="donutChart">
+                <g transform="rotate(-90 250 250)" id="donutSegments">
+                    <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
+                </g>
+                <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="donutTotal">0 ₽</text>
+            </svg>
+            <div class="chart-legend" id="chartLegend"></div>
+        </div>
+    </div>
+
+    <!-- Контроль лимитов -->
+    <div class="card">
+        <h3 class="card-title">Контроль лимитов</h3>
+        <div class="grid-3" style="gap: 20px;">
+            {% for limit in family_limits %}
+            <div class="limit-item {% if limit.is_exceeded %}limit-exceeded{% endif %}">
+                <div class="progress-label">
+                    <span class="{% if limit.is_exceeded %}text-error{% endif %}">{{ limit.category_name }}</span>
+                    <span class="{% if limit.is_exceeded %}text-error{% endif %}">
+                        {{ "%.0f"|format(limit.spent) }} / {{ "%.0f"|format(limit.limit_amount) }}
+                        {% if limit.is_exceeded %}
+                        <span class="exceeded-badge">Превышен!</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}"
+                             style="width: {{ limit.percent }}%"></div>
+                </div>
+                {% if limit.is_exceeded %}
+                <div class="exceeded-warning">
+                    Превышение на {{ "%.0f"|format(limit.spent - limit.limit_amount) }} ₽
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="text-center text-secondary">Нет установленных лимитов</div>
+            {% endfor %}
+        </div>
+        <div class="mt-3">
+            <a href="{{ url_for('main.limits') }}" class="btn btn-outline w-full">Управление лимитами</a>
+        </div>
+    </div>
+
+<!-- Модальное окно для лимитов (без изменений) -->
+<div class="modal-overlay" id="limitModal" onclick="closeModalOnOverlay(event)">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Установка лимита</h3>
+            <button class="modal-close" onclick="closeLimitModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="limitForm">
+                <div class="form-group">
+                    <label for="limit_category_id">Категория</label>
+                    <select id="limit_category_id" required>
+                        <option value="">Выберите категорию</option>
+                        {% for cat in expense_categories|sort(attribute='name') %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="limit_type">Тип лимита</label>
+                    <select id="limit_type">
+                        <option value="family">Семейный лимит</option>
+                        <option value="personal">Личный лимит</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="limit_amount">Лимит суммы</label>
+                    <input type="number" id="limit_amount" step="0.01" min="0" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeLimitModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="saveLimit()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<div id="donut-tooltip" class="donut-tooltip"></div>
+
+<script>
+    // Установка текущей даты и времени
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.getElementById('date');
+    const timeInput = document.getElementById('time');
+
+    if (dateInput) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+    }
+
+    if (timeInput) {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        timeInput.value = `${hours}:${minutes}`;
+    }
+});
+
+// Данные для диаграммы из бэкенда
+let chartData = {{ chart_data | tojson | safe }};
+let currentCategoryId = {{ chart_data.current_category_id | tojson }};
+let categoryStack = [];
+
+// Функция для обновления диаграммы
+function updateChart(categoryId = null, isBackNavigation = false) {
+    const url = categoryId
+        ? `/api/chart-data?category_id=${categoryId}`
+        : '/api/chart-data';
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showFlash(data.error, 'danger');
+                return;
+            }
+
+            // Управление стеком навигации
+            if (!isBackNavigation && categoryId !== null && categoryId !== currentCategoryId) {
+                // Идём ВПЕРЁД (клик по категории) — добавляем текущую в стек
+                if (currentCategoryId !== null) {
+                    categoryStack.push(currentCategoryId);
+                }
+            } else if (isBackNavigation && categoryStack.length > 0) {
+                // Уже внутри goBack стек обработан
+            } else if (categoryId === null) {
+                // Возврат в корень — очищаем стек
+                categoryStack = [];
+            }
+
+            currentCategoryId = data.current_category_id;
+            chartData = data;
+            renderChart(data);
+
+            // Обновляем навигацию
+            const backButton = document.getElementById('backButton');
+            const pathSpan = document.getElementById('currentCategoryPath');
+
+            if (data.current_category_id !== null && data.current_category_name) {
+                pathSpan.textContent = data.current_category_name;
+                backButton.style.display = 'inline-flex';
+            } else {
+                pathSpan.textContent = 'Все категории';
+                backButton.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showFlash('Ошибка загрузки данных диаграммы', 'danger');
+        });
+}
+
+function goBack() {
+    if (categoryStack.length > 0) {
+        const parentId = categoryStack.pop();
+        updateChart(parentId, true);
+    } else {
+        // Возврат в корень
+        updateChart(null, true);
+    }
+}
+
+// Рендер диаграммы
+function renderChart(data) {
+    const circumference = 1130.97;
+    const segmentsGroup = document.getElementById('donutSegments');
+    const totalText = document.getElementById('donutTotal');
+    const legendDiv = document.getElementById('chartLegend');
+
+    // Очищаем
+    segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
+    legendDiv.innerHTML = '';
+
+    if (!data.items || data.items.length === 0) {
+        totalText.textContent = '0 ₽';
+        legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+        return;
+    }
+
+    totalText.textContent = Math.round(data.total) + ' ₽';
+
+    let cumulativeOffset = 0;
+
+    // Предопределённые классы для цветов
+    const colorClasses = {
+        '#ff7a00': 'seg-orange',
+        '#10b981': 'seg-green',
+        '#3b82f6': 'seg-blue',
+        '#8b5cf6': 'seg-purple',
+        '#f59e0b': 'seg-warning',
+        '#ef4444': 'seg-danger',
+        '#22c55e': 'seg-success',
+        '#6c757d': 'seg-gray'
+    };
+
+    data.items.forEach((item, index) => {
+        const percent = (item.value / data.total) * 100;
+        const length = (percent / 100) * circumference;
+
+        // Определяем класс для сегмента
+        let segmentClass = 'donut-segment';
+        for (const [color, className] of Object.entries(colorClasses)) {
+            if (item.color.toLowerCase() === color.toLowerCase()) {
+                segmentClass += ' ' + className;
+                break;
+            }
+        }
+
+        // Создаём круг
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', '250');
+        circle.setAttribute('cy', '250');
+        circle.setAttribute('r', '180');
+        circle.setAttribute('fill', 'none');
+        circle.setAttribute('stroke', item.color);
+        circle.setAttribute('stroke-width', '40');
+        circle.setAttribute('data-name', item.name);
+        circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
+        circle.setAttribute('data-id', item.id);
+        circle.setAttribute('data-has-children', item.has_children);
+        const classes = segmentClass.split(' ');
+        classes.forEach(cls => circle.classList.add(cls));
+
+        circle.style.strokeDasharray = `${length} ${circumference}`;
+        circle.style.strokeDashoffset = -cumulativeOffset;
+        circle.style.transition = 'stroke-dasharray 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s ease, filter 0.3s ease';
+
+        if (item.has_children === true) {
+            circle.style.cursor = 'pointer';
+            circle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                updateChart(item.id, false);
+            });
+        }
+
+        segmentsGroup.appendChild(circle);
+
+        // Легенда
+        const legendItem = document.createElement('div');
+        legendItem.className = 'legend-item';
+        legendItem.innerHTML = `
+            <span class="legend-color" style="background: ${item.color}; box-shadow: 0 0 10px ${item.color};"></span>
+            ${item.name} (${percent.toFixed(1)}%)
+        `;
+        if (item.has_children === true) {
+            legendItem.style.cursor = 'pointer';
+            legendItem.addEventListener('click', () => updateChart(item.id, false));
+        }
+        legendDiv.appendChild(legendItem);
+
+        cumulativeOffset += length;
+    });
+
+    // Анимация появления сегментов (как в test_ui)
+    const segments = document.querySelectorAll('.donut-segment');
+    segments.forEach((seg, i) => {
+        setTimeout(() => {
+            seg.style.transition = `
+                stroke-dasharray 1s cubic-bezier(0.4, 0, 0.2, 1),
+                stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1),
+                stroke-width 0.3s ease,
+                filter 0.3s ease
+            `;
+        }, 150 + (i * 120));
+    });
+
+    // Тултипы как в test_ui
+    const tooltip = document.getElementById('donut-tooltip');
+    document.querySelectorAll('.donut-segment').forEach(seg => {
+        seg.addEventListener('mouseenter', (e) => {
+            const name = seg.dataset.name;
+            const value = seg.dataset.value;
+            tooltip.innerHTML = `<div class="tooltip-name">${name}</div><div class="tooltip-value">${value}</div>`;
+            tooltip.classList.add('visible');
+        });
+        seg.addEventListener('mousemove', (e) => {
+            let x = e.clientX + 16;
+            let y = e.clientY - 16;
+            if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
+            if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
+            tooltip.style.left = `${x}px`;
+            tooltip.style.top = `${y}px`;
+        });
+        seg.addEventListener('mouseleave', () => {
+            tooltip.classList.remove('visible');
+        });
+    });
+}
+
+// Кнопки +/- для суммы
+function changeAmount(delta) {
+    const input = document.getElementById('amount');
+    let currentVal = parseFloat(input.value) || 0;
+    let newVal = currentVal + delta;
+    if (newVal < 0) newVal = 0;
+    input.value = newVal.toFixed(2);
+    input.style.borderColor = 'var(--accent-primary)';
+    setTimeout(() => { input.style.borderColor = ''; }, 300);
+}
+
+// Модальное окно для лимитов
+function openLimitModal() {
+    document.getElementById('limitModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeLimitModal() {
+    document.getElementById('limitModal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function closeModalOnOverlay(event) {
+    if (event.target === event.currentTarget) {
+        closeLimitModal();
+    }
+}
+
+function deleteTransaction(id) {
+    showConfirm(
+        'Удалить транзакцию? Это действие нельзя отменить.',
+        'Удаление транзакции',
+        function() {
+            fetch(`/transaction/${id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Транзакция удалена', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        }
+    );
+}
+
+function saveLimit() {
+    const categoryId = document.getElementById('limit_category_id').value;
+    const limitType = document.getElementById('limit_type').value;
+    const amount = document.getElementById('limit_amount').value;
+
+    if (!categoryId || !amount) {
+        showFlash('Заполните все поля', 'warning');
+        return;
+    }
+
+    fetch('{{ url_for("main.set_limit") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            category_id: parseInt(categoryId),
+            limit_type: limitType,
+            amount: parseFloat(amount)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlash('Лимит успешно установлен', 'success');
+            closeLimitModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showFlash('Ошибка сервера', 'danger');
+    });
+}
+
+function exportReport() {
+    window.location.href = '{{ url_for("main.export_report") }}';
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLimitModal();
+});
+
+// Инициализация
+document.addEventListener('DOMContentLoaded', () => {
+    categoryStack = [];
+    currentCategoryId = {{ chart_data.current_category_id | tojson }};
+    updateChart(currentCategoryId, false);
+});
+</script>
+{% endblock %}

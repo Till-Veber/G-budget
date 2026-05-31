@@ -37,6 +37,11 @@
                                     <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}"
                                          style="width: {{ limit.percent }}%"></div>
                                 </div>
+                                {% if limit.is_exceeded %}
+                                <div class="exceeded-warning" style="font-size: 0.65rem; margin-top: 4px;">
+                                    Превышение на {{ "%.0f"|format(limit.spent - limit.limit_amount) }} ₽
+                                </div>
+                                {% endif %}
                             </td>
                             <td>
                                 <button class="delete-txn-btn" onclick="editLimit('personal', {{ limit.category_id }}, {{ limit.limit_amount }})" title="Редактировать">
@@ -91,10 +96,22 @@
                             <td>{{ limit.category_name }}</td>
                             <td>{{ "%.2f"|format(limit.limit_amount) }} ₽</td>
                             <td>{{ "%.2f"|format(limit.spent) }} ₽</td>
+                            <td class="{% if limit.is_exceeded %}text-error font-bold{% endif %}">
+                                {{ "%.2f"|format(limit.spent) }} ₽
+                                {% if limit.is_exceeded %}
+                                <span class="exceeded-badge-small">+{{ "%.0f"|format(limit.spent - limit.limit_amount) }}</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <div class="progress" style="width: 100px;">
-                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %}" style="width: {{ limit.percent }}%"></div>
+                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}"
+                                         style="width: {{ limit.percent }}%"></div>
                                 </div>
+                                {% if limit.is_exceeded %}
+                                <div class="exceeded-warning" style="font-size: 0.65rem; margin-top: 4px;">
+                                    Превышение на {{ "%.0f"|format(limit.spent - limit.limit_amount) }} ₽
+                                </div>
+                                {% endif %}
                             </td>
                             <td>
                                 <button class="delete-txn-btn" onclick="editLimit('family', {{ limit.category_id }}, {{ limit.limit_amount }})" title="Редактировать">
@@ -161,39 +178,6 @@
         </div>
     </div>
 </div>
-
-<style>
-.delete-txn-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 6px 8px;
-    border-radius: var(--radius-sm);
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.delete-txn-btn:hover {
-    color: var(--accent-primary);
-    background: var(--bg-hover);
-}
-.delete-txn-btn:active {
-    transform: scale(0.95);
-}
-.delete-txn-btn svg {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
-    stroke-width: 2;
-    fill: none;
-}
-.progress {
-    width: 100px;
-    height: 6px;
-}
-</style>
 
 <script>
 let currentLimitType = null;

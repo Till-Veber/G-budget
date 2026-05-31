@@ -114,32 +114,6 @@
     </div>
 </div>
 
-<style>
-.edit-txn-btn, .delete-txn-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 6px 8px;
-    border-radius: var(--radius-sm);
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.edit-txn-btn:hover {
-    color: var(--accent-primary);
-    background: var(--bg-hover);
-}
-.delete-txn-btn:hover {
-    color: var(--error);
-    background: rgba(239, 68, 68, 0.1);
-}
-.transaction-row.editing {
-    background: var(--bg-hover);
-}
-</style>
-
 <script>
 let editingTransactionId = null;
 

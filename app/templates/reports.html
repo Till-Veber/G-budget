@@ -475,65 +475,77 @@ function renderCategoryDonutChart(data) {
 
     totalText.textContent = Math.round(total) + ' ₽';
 
-    let cumulativeOffset = 0;
-    const colorClasses = {
-        '#ff7a00': 'seg-orange', '#10b981': 'seg-green', '#3b82f6': 'seg-blue',
-        '#8b5cf6': 'seg-purple', '#f59e0b': 'seg-warning', '#ef4444': 'seg-danger',
-        '#22c55e': 'seg-success', '#6c757d': 'seg-gray'
-    };
+    // Удаляем старые стили
+    const oldStyle = document.getElementById('report-donut-styles');
+    if (oldStyle) oldStyle.remove();
 
-    items.forEach((item) => {
+    const style = document.createElement('style');
+    style.id = 'report-donut-styles';
+
+    let cumulativeOffset = 0;
+
+    items.forEach((item, index) => {
         const percent = (item.value / total) * 100;
         const length = (percent / 100) * circumference;
-
-        let segmentClass = 'donut-segment';
-        const colorLower = (item.color || '#6c757d').toLowerCase();
-        for (const [color, className] of Object.entries(colorClasses)) {
-            if (colorLower === color.toLowerCase()) {
-                segmentClass += ' ' + className;
-                break;
-            }
-        }
+        const segmentClass = `report-segment-${Date.now()}-${index}`;
+        const color = item.color || '#6c757d';
 
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('cx', '250');
         circle.setAttribute('cy', '250');
         circle.setAttribute('r', '180');
         circle.setAttribute('fill', 'none');
-        circle.setAttribute('stroke', item.color || '#6c757d');
+        circle.setAttribute('stroke', color);
         circle.setAttribute('stroke-width', '40');
         circle.setAttribute('data-name', item.name);
         circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
-        circle.setAttribute('data-id', item.id);
+        circle.setAttribute('data-id', item.id || '');
         circle.setAttribute('data-has-children', item.has_children);
 
-        const classes = segmentClass.split(' ');
-        classes.forEach(cls => circle.classList.add(cls));
-
+        circle.classList.add('donut-segment', segmentClass);
         circle.style.strokeDasharray = `${length} ${circumference}`;
         circle.style.strokeDashoffset = -cumulativeOffset;
+        circle.style.transition = 'stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease, stroke-width 0.3s ease, filter 0.3s ease';
 
-        if (item.has_children) {
+        // Клик только если есть дети и это НЕ "Без подкатегории"
+        if (item.has_children && item.id !== null) {
             circle.style.cursor = 'pointer';
             circle.addEventListener('click', () => loadReport(item.id, false));
+        } else if (item.id === null) {
+            circle.style.cursor = 'default';
         }
 
         segmentsGroup.appendChild(circle);
 
+        // CSS для подсветки
+        style.textContent += `
+            .${segmentClass}:hover {
+                stroke-width: 48px !important;
+                filter: drop-shadow(0 0 25px ${color}) !important;
+                cursor: ${item.has_children && item.id !== null ? 'pointer' : 'default'};
+            }
+        `;
+
         const legendItem = document.createElement('div');
         legendItem.className = 'legend-item';
-        legendItem.innerHTML = `<span class="legend-color" style="background: ${item.color || '#6c757d'}; box-shadow: 0 0 10px ${item.color || '#6c757d'};"></span> ${item.name} (${percent.toFixed(1)}%)`;
-        if (item.has_children) {
-            legendItem.style.cursor = 'pointer';
-            legendItem.addEventListener('click', () => { if (item.has_children) loadReport(item.id, false); });
-        }
-        legendDiv.appendChild(legendItem);
+        legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
 
+        if (item.has_children && item.id !== null) {
+            legendItem.style.cursor = 'pointer';
+            legendItem.addEventListener('click', () => loadReport(item.id, false));
+        } else if (item.id === null) {
+            legendItem.style.cursor = 'default';
+        }
+
+        legendDiv.appendChild(legendItem);
         cumulativeOffset += length;
     });
 
+    document.head.appendChild(style);
+
+    // Тултипы
     const tooltip = document.getElementById('donut-tooltip');
-    document.querySelectorAll('.donut-segment').forEach(seg => {
+    document.querySelectorAll('#donutSegments .donut-segment').forEach(seg => {
         seg.addEventListener('mouseenter', (e) => {
             tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
             tooltip.classList.add('visible');

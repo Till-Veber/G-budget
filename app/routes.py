@@ -1030,7 +1030,7 @@ def api_chart_data():
     current_category = None
     if category_id:
         current_category = Category.query.get(category_id)
-        if current_category and current_category.family_id != current_user.family_id:
+        if not current_category or current_category.family_id != current_user.family_id:
             return jsonify({'error': 'Доступ запрещён'}), 403
 
     # Получаем дочерние категории (только расходы)
@@ -1041,9 +1041,8 @@ def api_chart_data():
         children = Category.query.filter_by(parent_id=None, type='Расход').all()
         current_category_name = None
 
-    # Функция для получения суммы расходов по категории и всем её потомкам
+    # Функция получения суммы по категории + все её подкатегории
     def get_category_total(category):
-        # Собираем все ID категории и всех её потомков (рекурсивно)
         all_ids = [category.id]
 
         def collect_ids(cat):
@@ -1061,14 +1060,24 @@ def api_chart_data():
         ).scalar() or 0
         return float(total_sum)
 
+    # === НОВАЯ ЛОГИКА: расчёт «прямых» транзакций у текущей категории ===
+    def get_direct_transactions_total(category):
+        """Сумма транзакций, привязанных напрямую к этой категории (не к детям)"""
+        total = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.user_id.in_(user_ids),
+            Transaction.category_id == category.id,
+            Transaction.date >= month_start.date()
+        ).scalar() or 0
+        return float(total)
+
     chart_items = []
     total = 0
 
+    # Добавляем дочерние категории
     for cat in children:
         value = get_category_total(cat)
         if value > 0:
             total += value
-            # Проверяем, есть ли у категории дети-расходы с ненулевыми суммами
             has_children_with_expenses = False
             for child in cat.children:
                 if child.type == 'Расход' and get_category_total(child) > 0:
@@ -1083,14 +1092,36 @@ def api_chart_data():
                 'has_children': has_children_with_expenses
             })
 
+    # === ДОБАВЛЯЕМ «Без подкатегории», если есть прямые транзакции ===
+    if current_category:
+        direct_value = get_direct_transactions_total(current_category)
+        if direct_value > 0:
+            total += direct_value
+            chart_items.append({
+                'id': None,  # специальный маркер
+                'name': 'Без подкатегории',
+                'color': '#9ca3af',  # серый
+                'value': direct_value,
+                'has_children': False
+            })
+
     # Сортируем по убыванию суммы
     chart_items.sort(key=lambda x: x['value'], reverse=True)
+
+    # История для навигации
+    history = []
+    if current_category:
+        parent = current_category.parent
+        while parent:
+            history.insert(0, parent.id)
+            parent = parent.parent
 
     return jsonify({
         'items': chart_items,
         'total': total,
         'current_category_id': category_id,
-        'current_category_name': current_category_name
+        'current_category_name': current_category_name,
+        'history': history
     })
 
 
@@ -1278,24 +1309,56 @@ def api_report_data():
             ).scalar() or 0
             return float(total)
 
+        # === НОВАЯ ФУНКЦИЯ: прямые транзакции текущей категории ===
+        def get_direct_transactions_total(category):
+            """Сумма транзакций, привязанных напрямую к этой категории (не к детям)"""
+            total = db.session.query(func.sum(Transaction.amount)).filter(
+                Transaction.user_id.in_(user_ids),
+                Transaction.category_id == category.id,
+                Transaction.date >= date_start,
+                Transaction.date <= date_end
+            ).scalar() or 0
+            return float(total)
+
         items = []
         total = 0
+
+        # Добавляем дочерние категории
         for cat in children:
             value = get_category_total(cat)
             if value > 0:
                 total += value
-                has_children = any(get_category_total(child) > 0 for child in cat.children if child.type == target_type)
+                # Проверяем, есть ли у категории дети с ненулевыми суммами
+                has_children_with_expenses = False
+                for child in cat.children:
+                    if child.type == target_type and get_category_total(child) > 0:
+                        has_children_with_expenses = True
+                        break
+
                 items.append({
                     'id': cat.id,
                     'name': cat.name,
                     'color': cat.color,
                     'value': value,
-                    'has_children': has_children
+                    'has_children': has_children_with_expenses
+                })
+
+        # === ДОБАВЛЯЕМ «Без подкатегории», если есть прямые транзакции ===
+        if current_category:
+            direct_value = get_direct_transactions_total(current_category)
+            if direct_value > 0:
+                total += direct_value
+                items.append({
+                    'id': None,  # специальный маркер
+                    'name': 'Без подкатегории',
+                    'color': '#9ca3af',  # серый
+                    'value': direct_value,
+                    'has_children': False
                 })
 
         items.sort(key=lambda x: x['value'], reverse=True)
 
-        # Для доходов total_income и total_expense меняются местами
+        # Для отчёта по расходам
         if report_type == 'expenses':
             return jsonify({
                 'total_income': total_income,
@@ -1305,7 +1368,7 @@ def api_report_data():
                 'current_category_id': category_id,
                 'current_category_name': current_name
             })
-        else:
+        else:  # Доходы
             return jsonify({
                 'total_income': total,
                 'total_expense': total_expense,
@@ -1315,10 +1378,9 @@ def api_report_data():
                 'current_category_name': current_name
             })
 
-
     elif group_by == 'user':
+        # ... остальной код для группировки по пользователям без изменений ...
         target_type = 'Расход' if report_type == 'expenses' else 'Доход'
-        # Данные по пользователям за период (в зависимости от типа отчёта)
         users_data = db.session.query(
             User.id, User.surname, User.name,
             func.sum(Transaction.amount).label('total')
@@ -1330,7 +1392,7 @@ def api_report_data():
                 db.session.query(Category.id).filter(Category.type == target_type)
             )
         ).group_by(User.id).all()
-        # Для сводки нужны и доходы и расходы
+
         total_income_all = db.session.query(func.sum(Transaction.amount)).filter(
             Transaction.user_id.in_(user_ids),
             Transaction.date >= date_start,
@@ -1338,6 +1400,7 @@ def api_report_data():
             Transaction.category_id.in_(db.session.query(Category.id).filter(Category.type == 'Доход'))
         ).scalar() or 0
         total_income_all = float(total_income_all)
+
         total_expense_all = db.session.query(func.sum(Transaction.amount)).filter(
             Transaction.user_id.in_(user_ids),
             Transaction.date >= date_start,
@@ -1345,7 +1408,7 @@ def api_report_data():
             Transaction.category_id.in_(db.session.query(Category.id).filter(Category.type == 'Расход'))
         ).scalar() or 0
         total_expense_all = float(total_expense_all)
-        # Формируем данные для диаграммы и таблицы
+
         user_items = []
         for u in users_data:
             if u.total and float(u.total) > 0:
@@ -1356,6 +1419,7 @@ def api_report_data():
                 })
         user_items.sort(key=lambda x: x['value'], reverse=True)
         total_for_chart = sum(item['value'] for item in user_items)
+
         return jsonify({
             'total_income': total_income_all,
             'total_expense': total_expense_all,
@@ -1364,7 +1428,7 @@ def api_report_data():
         })
 
     elif group_by in ['day', 'month']:
-        # Баланс по дням или месяцам
+        # ... код для баланса по дням/месяцам без изменений ...
         if group_by == 'day':
             from sqlalchemy import cast, Date
             balance_query = db.session.query(
@@ -1385,7 +1449,6 @@ def api_report_data():
                 Transaction.date <= date_end
             ).group_by(Transaction.date).order_by(Transaction.date).all()
         else:
-            # По месяцам
             from sqlalchemy import func as sql_func
             balance_query = db.session.query(
                 sql_func.strftime('%Y-%m', Transaction.date).label('period'),
@@ -1417,6 +1480,13 @@ def api_report_data():
                 'income': income,
                 'balance': running_balance
             })
+
+        return jsonify({
+            'total_income': total_income,
+            'total_expense': total_expense,
+            'items': balance_data,
+            'total': 0
+        })
 
     return jsonify({
         'total_income': total_income,

@@ -7,8 +7,23 @@
     <!-- Информация о семье -->
     <div class="card">
         <h3 class="card-title">Информация о семье</h3>
-        <div class="stat-value" style="font-size: 1.8rem;">{{ family.name }}</div>
+        <div class="stat-value" style="font-size: 1.8rem;" id="familyName">{{ family.name }}</div>
         <div class="text-secondary">Создана: {{ family.created_at.strftime('%d.%m.%Y') }}</div>
+
+        <!-- Кнопки управления семьёй -->
+        <div class="mt-3" style="display: flex; gap: 12px; flex-wrap: wrap;">
+            {% if current_user.role in ['Создатель', 'Администратор'] %}
+            <button class="btn btn-primary" onclick="openRenameFamilyModal()">
+                Переименовать семью
+            </button>
+            {% endif %}
+
+            {% if current_user.role == 'Создатель' %}
+            <button class="btn btn-danger" onclick="deleteFamily()">
+                Удалить семью
+            </button>
+            {% endif %}
+        </div>
 
         {% if current_user.role == 'Создатель' or current_user.role == 'Администратор' %}
         <div class="mt-3">
@@ -44,8 +59,8 @@
                                 {% else %}
                                     {% if current_user.role == 'Создатель' %}
                                     <select onchange="changeRole({{ member.id }}, this.value)" class="role-select" style="background: var(--bg-secondary); padding: 4px 8px; border-radius: var(--radius-sm);">
-                                        <option value="Участник" {% if member.role == 'Участник' %}selected{% endif %}>Участник</option>
-                                        <option value="Администратор" {% if member.role == 'Администратор' %}selected{% endif %}>Администратор</option>
+                                        <option value="Участник" {% if member.role=='Участник' %}selected{% endif %}>Участник</option>
+                                        <option value="Администратор" {% if member.role=='Администратор' %}selected{% endif %}>Администратор</option>
                                     </select>
                                     {% else %}
                                     <span class="badge {% if member.role == 'Создатель' %}badge-accent{% elif member.role == 'Администратор' %}badge-warning{% else %}badge-success{% endif %}">
@@ -323,5 +338,247 @@ function copyToClipboard(text, btnElement) {
         showFlash('Не удалось скопировать код', 'danger');
     });
 }
+
+// Переименование семьи
+function openRenameFamilyModal() {
+    document.getElementById('rename_family_name').value = document.getElementById('familyName').textContent;
+    document.getElementById('renameFamilyModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeRenameFamilyModal() {
+    document.getElementById('renameFamilyModal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function closeRenameFamilyModalOnOverlay(event) {
+    if (event.target === event.currentTarget) {
+        closeRenameFamilyModal();
+    }
+}
+
+function confirmRenameFamily() {
+    const newName = document.getElementById('rename_family_name').value.trim();
+    if (!newName) {
+        showFlash('Название семьи не может быть пустым', 'warning');
+        return;
+    }
+
+    if (newName.length > 100) {
+        showFlash('Название не должно превышать 100 символов', 'warning');
+        return;
+    }
+
+    fetch('{{ url_for("main.rename_family") }}', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showFlash('Семья переименована', 'success');
+            document.getElementById('familyName').textContent = newName;
+            closeRenameFamilyModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showFlash('Ошибка: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showFlash('Ошибка сервера', 'danger');
+    });
+}
+
+// Удаление семьи (только для создателя)
+function deleteFamily() {
+    const familyName = document.getElementById('familyName').textContent;
+    const confirmInput = document.getElementById('deleteFamilyConfirmInput');
+    const modal = document.getElementById('deleteFamilyModal');
+
+    // Обновляем подсказку в поле ввода
+    if (confirmInput) {
+        confirmInput.value = '';
+        confirmInput.placeholder = `Введите «${familyName}»`;
+    }
+
+    // Обновляем текст в подсказке
+    const hintParagraph = modal.querySelector('.text-muted strong');
+    if (hintParagraph) {
+        hintParagraph.textContent = familyName;
+    }
+
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Фокус на поле ввода
+    setTimeout(() => {
+        if (confirmInput) confirmInput.focus();
+    }, 100);
+}
+
+function closeDeleteFamilyModal() {
+    document.getElementById('deleteFamilyModal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function closeDeleteFamilyModalOnOverlay(event) {
+    if (event.target === event.currentTarget) {
+        closeDeleteFamilyModal();
+    }
+}
+
+// Обработчик кнопки удаления (добавляем после загрузки страницы)
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmBtn = document.getElementById('deleteFamilyConfirmBtn');
+    if (confirmBtn) {
+        // Удаляем старый обработчик, если есть
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', function() {
+            const familyName = document.getElementById('familyName').textContent;
+            const confirmInput = document.getElementById('deleteFamilyConfirmInput');
+            const inputValue = confirmInput ? confirmInput.value.trim() : '';
+
+            if (inputValue === familyName) {
+                // Показываем индикатор загрузки на кнопке
+                const originalText = newConfirmBtn.textContent;
+                newConfirmBtn.textContent = 'Удаление...';
+                newConfirmBtn.disabled = true;
+
+                fetch('{{ url_for("main.delete_family") }}', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        closeDeleteFamilyModal();
+                        showFlash('Семья "' + familyName + '" удалена', 'success');
+                        setTimeout(() => {
+                            window.location.href = '{{ url_for("main.no_family") }}';
+                        }, 1500);
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                        newConfirmBtn.textContent = originalText;
+                        newConfirmBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    showFlash('Ошибка сервера: ' + error, 'danger');
+                    newConfirmBtn.textContent = originalText;
+                    newConfirmBtn.disabled = false;
+                });
+            } else if (inputValue) {
+                showFlash('Название семьи введено неверно', 'warning');
+                if (confirmInput) {
+                    confirmInput.value = '';
+                    confirmInput.focus();
+                    confirmInput.style.borderColor = 'var(--error)';
+                    setTimeout(() => {
+                        if (confirmInput) confirmInput.style.borderColor = '';
+                    }, 500);
+                }
+            } else {
+                showFlash('Введите название семьи для подтверждения', 'warning');
+                if (confirmInput) {
+                    confirmInput.focus();
+                    confirmInput.style.borderColor = 'var(--error)';
+                    setTimeout(() => {
+                        if (confirmInput) confirmInput.style.borderColor = '';
+                    }, 500);
+                }
+            }
+        });
+    }
+});
+
+// Закрытие по Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('deleteFamilyModal');
+        if (modal && modal.classList.contains('active')) {
+            closeDeleteFamilyModal();
+        }
+    }
+});
+
+// Подтверждение по Enter в поле ввода
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmInput = document.getElementById('deleteFamilyConfirmInput');
+    if (confirmInput) {
+        confirmInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const confirmBtn = document.getElementById('deleteFamilyConfirmBtn');
+                if (confirmBtn) confirmBtn.click();
+            }
+        });
+    }
+});
 </script>
+
+<!-- Модальное окно для переименования семьи -->
+<div class="modal-overlay" id="renameFamilyModal" onclick="closeRenameFamilyModalOnOverlay(event)">
+    <div class="modal" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Переименование семьи</h3>
+            <button class="modal-close" onclick="closeRenameFamilyModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="renameFamilyForm">
+                <div class="form-group">
+                    <label for="rename_family_name">Новое название семьи</label>
+                    <input type="text" id="rename_family_name" value="{{ family.name }}" required maxlength="100">
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeRenameFamilyModal()">Отмена</button>
+            <button class="btn btn-primary" onclick="confirmRenameFamily()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для подтверждения удаления семьи -->
+<div class="modal-overlay" id="deleteFamilyModal" onclick="closeDeleteFamilyModalOnOverlay(event)">
+    <div class="modal" style="max-width: 450px;">
+        <div class="modal-header">
+            <h3 class="modal-title" style="color: var(--error);">Удаление семьи</h3>
+            <button class="modal-close" onclick="closeDeleteFamilyModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--error); padding: 12px; margin-bottom: 20px; border-radius: var(--radius-sm);">
+                <strong style="color: var(--error);">ВНИМАНИЕ!</strong>
+                <p style="margin-top: 8px; font-size: 0.9rem; color: var(--text-secondary);">
+                    Это действие невозможно отменить. Все данные семьи будут безвозвратно удалены:
+                </p>
+                <ul style="margin-top: 8px; margin-left: 20px; font-size: 0.85rem; color: var(--text-secondary);">
+                    <li>Все транзакции всех участников</li>
+                    <li>Все категории и лимиты</li>
+                    <li>Все приглашения</li>
+                </ul>
+                <p style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
+                    Все участники будут откреплены от семьи.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label style="color: var(--error);">Для подтверждения введите название семьи:</label>
+                <input type="text" id="deleteFamilyConfirmInput"
+                       placeholder="Введите «{{ family.name }}»"
+                       autocomplete="off"
+                       style="border-color: var(--error);">
+                <p class="text-muted" style="font-size: 0.75rem; margin-top: 6px;">
+                    Введите: <strong style="color: var(--accent-primary);">{{ family.name }}</strong>
+                </p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDeleteFamilyModal()">Отмена</button>
+            <button class="btn btn-danger" id="deleteFamilyConfirmBtn">Удалить навсегда</button>
+        </div>
+    </div>
+</div>
 {% endblock %}

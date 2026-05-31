@@ -29,9 +29,9 @@ class Family(db.Model):
     created_at = db.Column(db.Date, default=datetime.utcnow)
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     members = db.relationship('User', backref='family', lazy='dynamic', foreign_keys='User.family_id')
-    categories = db.relationship('Category', backref='family', lazy='dynamic')
-    invitations = db.relationship('Invitation', backref='family', lazy='dynamic')
-    family_plans = db.relationship('FamilyPlan', backref='family', lazy='dynamic')
+    categories = db.relationship('Category', backref='family', lazy='dynamic', cascade='all, delete-orphan')
+    invitations = db.relationship('Invitation', backref='family', lazy='dynamic', cascade='all, delete-orphan')
+    family_plans = db.relationship('FamilyPlan', backref='family', lazy='dynamic', cascade='all, delete-orphan')
 
 class Invitation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -50,7 +50,7 @@ class Category(db.Model):
     color = db.Column(db.String(7), default='#6c757d')
     is_protected = db.Column(db.Boolean, default=False)
     children = db.relationship('Category', backref=db.backref('parent', remote_side=[id]), lazy='dynamic')
-    transactions = db.relationship('Transaction', backref='category', lazy='dynamic')
+    transactions = db.relationship('Transaction', backref='category', lazy='dynamic', cascade='all, delete-orphan')
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)

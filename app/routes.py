@@ -1495,6 +1495,56 @@ def api_report_data():
         'total': 0
     })
 
+
+@main_bp.route('/family/rename', methods=['PUT'])
+@login_required
+def rename_family():
+    """Переименование семьи (доступно создателю и администраторам)"""
+    if not current_user.family_id:
+        return jsonify({'error': 'Семья не найдена'}), 400
+    if current_user.role not in ['Создатель', 'Администратор']:
+        return jsonify({'error': 'Доступ запрещён. Только создатель или администратор могут переименовать семью'}), 403
+    data = request.get_json()
+    new_name = data.get('name', '').strip()
+    if not new_name:
+        return jsonify({'error': 'Название семьи не может быть пустым'}), 400
+    if len(new_name) > 100:
+        return jsonify({'error': 'Название не должно превышать 100 символов'}), 400
+    family = Family.query.get(current_user.family_id)
+    if not family:
+        return jsonify({'error': 'Семья не найдена'}), 404
+    old_name = family.name
+    family.name = new_name
+    db.session.commit()
+    return jsonify({'success': True, 'old_name': old_name, 'new_name': new_name})
+
+
+@main_bp.route('/family/delete', methods=['DELETE'])
+@login_required
+def delete_family():
+    """Удаление семьи (только для создателя)"""
+    if not current_user.family_id:
+        return jsonify({'error': 'Семья не найдена'}), 400
+    if current_user.role != 'Создатель':
+        return jsonify({'error': 'Доступ запрещён. Только создатель может удалить семью'}), 403
+    family_id = current_user.family_id
+    family = Family.query.get(family_id)
+    if not family:
+        return jsonify({'error': 'Семья не найдена'}), 404
+    members = User.query.filter_by(family_id=family_id).all()
+    for member in members:
+        member.family_id = None
+        member.role = 'Участник'
+    Invitation.query.filter_by(family_id=family_id).delete()
+    FamilyPlan.query.filter_by(family_id=family_id).delete()
+    categories = Category.query.filter_by(family_id=family_id).all()
+    for cat in categories:
+        Transaction.query.filter_by(category_id=cat.id).delete()
+    Category.query.filter_by(family_id=family_id).delete()
+    db.session.delete(family)
+    db.session.commit()
+    return jsonify({'success': True})
+
 @main_bp.route('/')
 def index():
     """Главная страница (лендинг)"""

@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+instance/*.db
+instance/*.sqlite
+instance/*.sqlite3
+
+# Flask
+instance/
+.env
+.flaskenv
+.wsgi
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+*.pid
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Distribution
+*.egg-info/
+dist/
+build/
+
+# Migrations (если используете Flask-Migrate)
+migrations/__pycache__/
+migrations/versions/*.pyc
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+
+# Secrets
+config_local.py
+secrets.py
+*.key
+*.pem

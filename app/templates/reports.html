@@ -80,58 +80,64 @@
 </div>
 
 <!-- Кольцевая диаграмма (для категорий) -->
-<div id="categoryChartContainer" class="card chart-container mb-4">
-    <div class="flex justify-between items-center mb-3">
-        <h3 class="card-title" style="margin: 0;" id="chartTitle">Расходы по категориям</h3>
-        <div id="chartNavigation" style="display: flex; gap: 8px; align-items: center;">
-            <span id="currentCategoryPath" class="text-secondary" style="font-size: 0.85rem;"></span>
-            <button id="backButton" class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem; display: none;" onclick="goBack()">← Назад</button>
+<div class="grid-2 mb-4">
+    <div id="categoryChartContainer" class="card chart-container mb-4">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="card-title" style="margin: 0;" id="chartTitle">Расходы по категориям</h3>
+            <div id="chartNavigation" style="display: flex; gap: 8px; align-items: center;">
+                <span id="currentCategoryPath" class="text-secondary" style="font-size: 0.85rem;"></span>
+                <button id="backButton" class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem; display: none;" onclick="goBack()">← Назад</button>
+            </div>
         </div>
-    </div>
-    <div class="donut-chart-wrapper">
-        <svg class="donut-chart" viewBox="0 0 500 500" id="donutChart">
-            <g transform="rotate(-90 250 250)" id="donutSegments">
-                <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
-            </g>
-            <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="donutTotal">0 ₽</text>
-        </svg>
-        <div class="chart-legend" id="chartLegend"></div>
+        <div class="donut-chart-wrapper">
+            <svg class="donut-chart" viewBox="0 0 500 500" id="donutChart">
+                <g transform="rotate(-90 250 250)" id="donutSegments">
+                    <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
+                </g>
+                <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="donutTotal">0 ₽</text>
+            </svg>
+            <div class="chart-legend" id="chartLegend"></div>
+        </div>
     </div>
 </div>
 
 <!-- Кольцевая диаграмма (для пользователей) -->
-<div id="userChartContainer" class="card chart-container mb-4" style="display: none;">
-    <div class="flex justify-between items-center mb-3">
-        <h3 class="card-title" style="margin: 0;">Расходы по пользователям</h3>
-    </div>
-    <div class="donut-chart-wrapper">
-        <svg class="donut-chart" viewBox="0 0 500 500" id="userDonutChart">
-            <g transform="rotate(-90 250 250)" id="userDonutSegments">
-                <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
-            </g>
-            <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="userDonutTotal">0 ₽</text>
-        </svg>
-        <div class="chart-legend" id="userChartLegend"></div>
+<div class="grid-2 mb-4">
+    <div id="userChartContainer" class="card chart-container mb-4" style="display: none;">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="card-title" style="margin: 0;">Расходы по пользователям</h3>
+        </div>
+        <div class="donut-chart-wrapper">
+            <svg class="donut-chart" viewBox="0 0 500 500" id="userDonutChart">
+                <g transform="rotate(-90 250 250)" id="userDonutSegments">
+                    <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
+                </g>
+                <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="userDonutTotal">0 ₽</text>
+            </svg>
+            <div class="chart-legend" id="userChartLegend"></div>
+        </div>
     </div>
 </div>
 
 <!-- Таблица данных (детализация) -->
-<div class="card">
-    <h3 class="card-title">Детализация</h3>
-    <div class="table-container">
-        <div class="table-wrapper">
-            <table id="reportTable">
-                <thead>
-                    <tr>
-                        <th>Категория / Пользователь</th>
-                        <th>Сумма</th>
-                        <th>Доля</th>
-                    </tr>
-                </thead>
-                <tbody id="reportTableBody">
-                    <tr><td colspan="3" class="text-center text-secondary">Выберите параметры отчёта</td></tr>
-                </tbody>
-            </table>
+<div class="grid-2 mb-4">
+    <div class="card">
+        <h3 class="card-title">Детализация</h3>
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table id="reportTable">
+                    <thead>
+                        <tr>
+                            <th>Категория / Пользователь</th>
+                            <th>Сумма</th>
+                            <th>Доля</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        <tr><td colspan="3" class="text-center text-secondary">Выберите параметры отчёта</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>

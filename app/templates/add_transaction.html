@@ -3,40 +3,42 @@
 {% block title %}Добавить транзакцию - FamilyBudget{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width: 600px; margin: 0 auto;">
-    <h2 class="card-title">Добавить операцию</h2>
-    <form method="POST">
-        <div class="form-group">
-            <label for="category_id">Категория</label>
-            <select id="category_id" name="category_id" required>
-                <option value="">Выберите категорию</option>
-                {% for cat in categories|sort(attribute='name') %}
-                <option value="{{ cat.id }}" style="color: {{ cat.color }};">
-                    {{ cat.name }} ({{ cat.type }})
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="amount">Сумма</label>
-            <input type="number" id="amount" name="amount" step="0.01" min="0.01" required>
-        </div>
-        <div class="flex gap-2">
-            <div class="form-group" style="flex: 1;">
-                <label for="date">Дата</label>
-                <input type="date" id="date" name="date" required>
+<div class="grid-2 mb-4">
+    <div class="card" style="max-width: 600px; margin: 0 auto;">
+        <h2 class="card-title">Добавить операцию</h2>
+        <form method="POST">
+            <div class="form-group">
+                <label for="category_id">Категория</label>
+                <select id="category_id" name="category_id" required>
+                    <option value="">Выберите категорию</option>
+                    {% for cat in categories|sort(attribute='name') %}
+                    <option value="{{ cat.id }}" style="color: {{ cat.color }};">
+                        {{ cat.name }} ({{ cat.type }})
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
-            <div class="form-group" style="flex: 1;">
-                <label for="time">Время</label>
-                <input type="time" id="time" name="time">
+            <div class="form-group">
+                <label for="amount">Сумма</label>
+                <input type="number" id="amount" name="amount" step="0.01" min="0.01" required>
             </div>
-        </div>
-        <div class="form-group">
-            <label for="comment">Комментарий</label>
-            <textarea id="comment" name="comment" rows="3" placeholder="Описание операции..."></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary w-full">Сохранить транзакцию</button>
-    </form>
+            <div class="flex gap-2">
+                <div class="form-group" style="flex: 1;">
+                    <label for="date">Дата</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="time">Время</label>
+                    <input type="time" id="time" name="time">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="comment">Комментарий</label>
+                <textarea id="comment" name="comment" rows="3" placeholder="Описание операции..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary w-full">Сохранить транзакцию</button>
+        </form>
+    </div>
 </div>
 
 <script>

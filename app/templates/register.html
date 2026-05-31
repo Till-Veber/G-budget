@@ -3,40 +3,42 @@
 {% block title %}Регистрация - FamilyBudget{% endblock %}
 
 {% block content %}
-<div class="card" style="max-width: 600px; margin: 0 auto;">
-    <h2 class="card-title" style="font-size: 1.8rem;">Регистрация</h2>
-    <form method="POST">
-        <div class="grid-2" style="gap: 16px;">
-            <div class="form-group">
-                <label for="surname">Фамилия</label>
-                <input type="text" id="surname" name="surname" required>
+<div class="grid-2 mb-4">
+    <div class="card" style="max-width: 600px; margin: 0 auto;">
+        <h2 class="card-title" style="font-size: 1.8rem;">Регистрация</h2>
+        <form method="POST">
+            <div class="grid-2" style="gap: 16px;">
+                <div class="form-group">
+                    <label for="surname">Фамилия</label>
+                    <input type="text" id="surname" name="surname" required>
+                </div>
+                <div class="form-group">
+                    <label for="name">Имя</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
             </div>
             <div class="form-group">
-                <label for="name">Имя</label>
-                <input type="text" id="name" name="name" required>
+                <label for="patronymic">Отчество</label>
+                <input type="text" id="patronymic" name="patronymic">
             </div>
+            <div class="form-group">
+                <label for="login">Логин</label>
+                <input type="text" id="login" name="login" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Пароль</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Подтверждение пароля</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-full">Зарегистрироваться</button>
+        </form>
+        <div class="text-center mt-3">
+            <span class="text-secondary">Уже есть аккаунт?</span>
+            <a href="{{ url_for('main.login') }}" class="text-accent">Войти</a>
         </div>
-        <div class="form-group">
-            <label for="patronymic">Отчество</label>
-            <input type="text" id="patronymic" name="patronymic">
-        </div>
-        <div class="form-group">
-            <label for="login">Логин</label>
-            <input type="text" id="login" name="login" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Пароль</label>
-            <input type="password" id="password" name="password" required>
-        </div>
-        <div class="form-group">
-            <label for="confirm_password">Подтверждение пароля</label>
-            <input type="password" id="confirm_password" name="confirm_password" required>
-        </div>
-        <button type="submit" class="btn btn-primary w-full">Зарегистрироваться</button>
-    </form>
-    <div class="text-center mt-3">
-        <span class="text-secondary">Уже есть аккаунт?</span>
-        <a href="{{ url_for('main.login') }}" class="text-accent">Войти</a>
     </div>
 </div>
 {% endblock %}

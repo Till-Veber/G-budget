@@ -1507,6 +1507,36 @@ tbody tr:last-child td {
   margin: 8px 0;
 }
 
+.drop-zone-root {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 2px dashed var(--border-primary);
+    border-radius: var(--radius-md);
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    transition: var(--transition-base);
+    background: var(--bg-secondary);
+    cursor: pointer;
+}
+
+.drop-zone-root.drag-over {
+    border-color: var(--accent-primary);
+    background: var(--accent-glow);
+    color: var(--accent-primary);
+    transform: scale(1.01);
+}
+
+.drop-zone-root i,
+.drop-zone-root svg {
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.category-tree {
+    position: relative;
+}
+
 /* ==================== СВОДНАЯ СТАТИСТИКА (ОТЧЁТЫ) ==================== */
 .stat-summary {
   display: flex;

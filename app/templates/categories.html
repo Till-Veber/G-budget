@@ -52,7 +52,11 @@
 
     <div class="card">
         <h3 class="card-title">Список категорий</h3>
-        <p class="text-secondary" style="font-size: 0.8rem; margin-bottom: 16px;">Перетаскивайте категории для изменения вложенности</p>
+        <p class="text-secondary" style="font-size: 0.8rem; margin-bottom: 16px;">
+            Перетаскивайте категории:
+            <strong>внутрь</strong> категории — для создания подкатегории,<br>
+            в <strong>жёлтую зону</strong> сверху — для перемещения в корень
+        </p>
         <div class="category-tree" id="categoryTree"></div>
     </div>
 </div>
@@ -61,9 +65,6 @@
 {% block extra_js %}
 <script>
     let selectedColor = '#ff7a00';
-    let draggedItem = null;
-    let dragOverItem = null;
-    let dragOverPosition = null;
     let dragSourceId = null;
 
     const categoryData = {{ categories | tojson | safe }};
@@ -128,7 +129,15 @@
                 a.name.toLowerCase().localeCompare(b.name.toLowerCase())
             );
 
-            let html = '';
+            let html = `
+                <div class="drop-zone-root" id="dropZoneRoot">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 3v12m0 0-3-3m3 3 3-3"/>
+                        <path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>
+                    </svg>
+                    Перетащите сюда для перемещения в корень
+                </div>
+            `;
             for (let cat of sortedRoot) {
                 html += renderCategoryHTML(cat, 0);
             }
@@ -141,7 +150,7 @@
 
     function initDragAndDrop() {
         const draggables = document.querySelectorAll('.category-item');
-        const containers = document.querySelectorAll('.category-tree, .category-children');
+        const dropZoneRoot = document.getElementById('dropZoneRoot');
 
         draggables.forEach(draggable => {
             draggable.addEventListener('dragstart', handleDragStart);
@@ -151,9 +160,11 @@
             draggable.addEventListener('drop', handleDrop);
         });
 
-        containers.forEach(container => {
-            container.addEventListener('dragover', (e) => e.preventDefault());
-        });
+        if (dropZoneRoot) {
+            dropZoneRoot.addEventListener('dragover', handleRootDragOver);
+            dropZoneRoot.addEventListener('dragleave', handleRootDragLeave);
+            dropZoneRoot.addEventListener('drop', handleRootDrop);
+        }
     }
 
     function handleDragStart(e) {
@@ -165,8 +176,10 @@
 
     function handleDragEnd(e) {
         document.querySelectorAll('.category-item').forEach(el => {
-            el.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
+            el.classList.remove('dragging', 'drag-over');
         });
+        const dropZone = document.getElementById('dropZoneRoot');
+        if (dropZone) dropZone.classList.remove('drag-over');
         dragSourceId = null;
     }
 
@@ -177,31 +190,14 @@
 
         e.dataTransfer.dropEffect = 'move';
 
-        const rect = target.getBoundingClientRect();
-        const mouseY = e.clientY;
-        const threshold = rect.top + rect.height / 3;
-        const thresholdBottom = rect.bottom - rect.height / 3;
-
-        target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
-
-        if (mouseY < threshold) {
-            target.classList.add('drag-over-before');
-            dragOverPosition = 'before';
-        } else if (mouseY > thresholdBottom) {
-            target.classList.add('drag-over-after');
-            dragOverPosition = 'after';
-        } else {
-            target.classList.add('drag-over');
-            dragOverPosition = 'inside';
-        }
-
-        dragOverItem = target;
+        target.classList.remove('drag-over');
+        target.classList.add('drag-over');
     }
 
     function handleDragLeave(e) {
         const target = e.target.closest('.category-item');
         if (target) {
-            target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+            target.classList.remove('drag-over');
         }
     }
 
@@ -211,10 +207,9 @@
         if (!targetItem || !dragSourceId || parseInt(targetItem.dataset.id) === dragSourceId) return;
 
         const targetId = parseInt(targetItem.dataset.id);
-        const position = dragOverPosition;
 
         document.querySelectorAll('.category-item').forEach(el => {
-            el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+            el.classList.remove('drag-over');
         });
 
         fetch('/category/move', {
@@ -223,13 +218,59 @@
             body: JSON.stringify({
                 category_id: dragSourceId,
                 target_id: targetId,
-                position: position
+                position: 'inside'
             })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showFlash('Категория перемещена', 'success');
+                showFlash('Категория перемещена внутрь', 'success');
+                location.reload();
+            } else {
+                showFlash('Ошибка: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            showFlash('Ошибка сервера', 'danger');
+        });
+    }
+
+    function handleRootDragOver(e) {
+        e.preventDefault();
+        const dropZone = document.getElementById('dropZoneRoot');
+        if (dropZone && dragSourceId) {
+            dropZone.classList.add('drag-over');
+            e.dataTransfer.dropEffect = 'move';
+        }
+    }
+
+    function handleRootDragLeave(e) {
+        const dropZone = document.getElementById('dropZoneRoot');
+        if (dropZone) {
+            dropZone.classList.remove('drag-over');
+        }
+    }
+
+    function handleRootDrop(e) {
+        e.preventDefault();
+        const dropZone = document.getElementById('dropZoneRoot');
+        if (dropZone) dropZone.classList.remove('drag-over');
+
+        if (!dragSourceId) return;
+
+        fetch('/category/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: dragSourceId,
+                target_id: null,
+                position: 'root'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showFlash('Категория перемещена в корень', 'success');
                 location.reload();
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');

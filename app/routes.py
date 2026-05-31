@@ -704,6 +704,14 @@ def move_category():
     if category.family_id != current_user.family_id:
         return jsonify({'error': 'Доступ запрещён'}), 403
 
+    if position == 'root':
+        category.parent_id = None
+        db.session.commit()
+        return jsonify({'success': True})
+
+    if not target_id:
+        return jsonify({'error': 'Целевая категория не указана'}), 400
+
     target = Category.query.get_or_404(target_id)
     if target.family_id != current_user.family_id:
         return jsonify({'error': 'Доступ запрещён'}), 403

@@ -1669,6 +1669,19 @@ tbody tr:last-child td {
   background: var(--accent-primary);
 }
 
+/* ==================== СТИЛИЗАЦИЯ ВЛОЖЕННЫХ КАТЕГОРИЙ В ВЫПАДАЮЩЕМ СПИСКЕ ==================== */
+select optgroup {
+    font-weight: 600;
+    color: var(--accent-primary);
+    background-color: var(--bg-card);
+}
+
+select optgroup option {
+    font-weight: normal;
+    padding-left: 20px;
+    color: var(--text-secondary);
+}
+
 /* ==================== АДАПТИВНОСТЬ (MEDIA QUERIES) ==================== */
 @media (max-width: 1024px) {
   .grid-2,

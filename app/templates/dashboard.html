@@ -59,9 +59,10 @@
                 <label for="category_id">Категория</label>
                 <select id="category_id" name="category_id" required>
                     <option value="">Выберите категорию</option>
-                    {% for cat in categories|sort(attribute='name') %}
+                    {% for cat in categories %}
                     <option value="{{ cat.id }}" style="color: {{ cat.color }};">
-                        {{ cat.name }} ({{ cat.type }})
+                        {% for i in range(cat.level) %}&nbsp;&nbsp;&nbsp;&nbsp;{% endfor %}
+                        {% if cat.level > 0 %}↳ {% endif %}{{ cat.name }} ({{ cat.type }})
                     </option>
                     {% endfor %}
                 </select>

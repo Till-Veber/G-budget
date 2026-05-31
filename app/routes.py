@@ -3,8 +3,7 @@ from flask_login import login_user, login_required, logout_user, current_user
 from app import db, login_manager
 from app.models import User, Family, Category, Transaction, Invitation, UserPlan, FamilyPlan
 from app.utils import (
-    get_category_with_children_ids, calculate_limit_status,
-    get_category_total, get_direct_transactions_total, build_chart_items
+    get_category_with_children_ids, calculate_limit_status, build_chart_items, build_category_tree
 )
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -170,9 +169,9 @@ def dashboard():
         User.family_id == current_user.family_id
     ).order_by(Transaction.date.desc(), Transaction.time.desc()).limit(10).all()
 
-    categories = Category.query.filter_by(family_id=current_user.family_id).order_by(Category.name).all()
-    expense_categories = Category.query.filter_by(family_id=current_user.family_id, type='Расход').order_by(
-        Category.name).all()
+    all_categories = Category.query.filter_by(family_id=current_user.family_id).all()
+    hierarchical_categories = build_category_tree(all_categories)
+    expense_categories = [cat for cat in all_categories if cat.type == 'Расход']
 
     family_limits = []
     if current_user.role in ['Создатель', 'Администратор']:
@@ -224,7 +223,7 @@ def dashboard():
         budget_limit=month_income > 0,
         members_count=members_count,
         last_transactions=last_transactions,
-        categories=categories,
+        categories=hierarchical_categories,
         expense_categories=expense_categories,
         family_limits=family_limits,
         chart_data=chart_data
@@ -573,8 +572,14 @@ def categories():
         return tree
 
     category_tree = build_tree(all_categories)
+    hierarchical_categories = build_category_tree(all_categories)
 
-    return render_template('categories.html', categories=category_tree, all_categories=all_categories)
+    return render_template(
+        'categories.html',
+        categories=category_tree,
+        all_categories=all_categories,
+        hierarchical_categories=hierarchical_categories
+    )
 
 
 @main_bp.route('/category/add', methods=['POST'])
@@ -773,10 +778,12 @@ def add_transaction():
         else:
             flash('Транзакция успешно добавлена', 'success')
 
-        return redirect(url_for('main.dashboard'))
+        return redirect(url_for('main.transactions', added=1))
 
-    categories = Category.query.filter_by(family_id=current_user.family_id).order_by(Category.name).all()
-    return render_template('add_transaction.html', categories=categories)
+    all_categories = Category.query.filter_by(family_id=current_user.family_id).all()
+    hierarchical_categories = build_category_tree(all_categories)
+
+    return render_template('add_transaction.html', categories=hierarchical_categories)
 
 
 @main_bp.route('/transactions')

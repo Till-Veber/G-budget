@@ -24,8 +24,11 @@
                 <label for="cat_parent">Родительская категория</label>
                 <select id="cat_parent">
                     <option value="">— Корневая категория —</option>
-                    {% for cat in all_categories %}
-                    <option value="{{ cat.id }}">{{ cat.name }} ({{ cat.type }})</option>
+                    {% for cat in hierarchical_categories %}
+                    <option value="{{ cat.id }}" style="color: {{ cat.color }};">
+                        {% for i in range(cat.level) %}&nbsp;&nbsp;&nbsp;&nbsp;{% endfor %}
+                        {% if cat.level > 0 %}↳ {% endif %}{{ cat.name }} ({{ cat.type }})
+                    </option>
                     {% endfor %}
                 </select>
             </div>

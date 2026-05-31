@@ -24,14 +24,12 @@ def get_category_with_children_ids(category):
 def get_category_total(category, user_ids, date_start, date_end=None, category_type=None):
     """
     Возвращает сумму транзакций по категории и всем её потомкам.
-
-    Args:
-        category: объект Category
-        user_ids: список ID пользователей
-        date_start: начальная дата
-        date_end: конечная дата (если None, то только начало месяца)
-        category_type: 'Доход' или 'Расход' (если None, то без фильтра)
     """
+    if hasattr(date_start, 'date'):
+        date_start = date_start.date()
+    if date_end is not None and hasattr(date_end, 'date'):
+        date_end = date_end.date()
+
     all_ids = [category.id]
 
     def collect_ids(cat):
@@ -68,6 +66,11 @@ def get_category_total(category, user_ids, date_start, date_end=None, category_t
 
 def get_direct_transactions_total(category, user_ids, date_start, date_end=None):
     """Сумма транзакций, привязанных напрямую к категории (без учёта детей)"""
+    if hasattr(date_start, 'date'):
+        date_start = date_start.date()
+    if date_end is not None and hasattr(date_end, 'date'):
+        date_end = date_end.date()
+
     query = db.session.query(func.sum(Transaction.amount)).filter(
         Transaction.user_id.in_(user_ids),
         Transaction.category_id == category.id
@@ -165,3 +168,28 @@ def calculate_limit_status(user, category, new_amount, date):
         return f"⚠ Превышен общесемейный лимит по категории '{category.name}'!"
 
     return None
+
+
+def build_category_tree(categories, parent_id=None, level=0):
+    """
+    Рекурсивно строит дерево категорий для отображения в выпадающем списке.
+    Возвращает список кортежей (id, name_with_indent, type, color).
+    """
+    result = []
+    # Фильтруем категории по parent_id
+    for cat in categories:
+        if cat.parent_id == parent_id:
+            # Создаем отступ из символов неразрывного пробела (&nbsp;) или дефисов
+            indent = '— ' * level if level > 0 else ''
+            display_name = f"{indent}{cat.name}"
+
+            result.append({
+                'id': cat.id,
+                'name': display_name,
+                'type': cat.type,
+                'color': cat.color,
+                'level': level
+            })
+            # Рекурсивно добавляем детей, увеличивая уровень вложенности
+            result.extend(build_category_tree(categories, cat.id, level + 1))
+    return result

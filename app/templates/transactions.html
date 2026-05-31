@@ -87,10 +87,12 @@
                         {% endfor %}
                     </select>
                 </div>
+
                 <div class="form-group">
                     <label for="edit_amount">Сумма</label>
                     <input type="number" id="edit_amount" step="0.01" min="0.01" required>
                 </div>
+
                 <div class="flex gap-2">
                     <div class="form-group" style="flex: 1;">
                         <label for="edit_date">Дата</label>
@@ -101,6 +103,7 @@
                         <input type="time" id="edit_time">
                     </div>
                 </div>
+
                 <div class="form-group">
                     <label for="edit_comment">Комментарий</label>
                     <textarea id="edit_comment" rows="3" placeholder="Описание операции..."></textarea>
@@ -115,94 +118,94 @@
 </div>
 
 <script>
-let editingTransactionId = null;
+    let editingTransactionId = null;
 
-function editTransaction(id) {
-    editingTransactionId = id;
-    const row = document.querySelector(`tr[data-id="${id}"]`);
-    const categoryId = row.querySelector('.category-cell').dataset.categoryId;
-    const amount = row.querySelector('.amount-cell').innerText.replace(/[+-]/g, '').trim();
-    const date = row.querySelector('.date-cell').innerText.split('.').reverse().join('-');
-    const time = row.querySelector('.time-cell').innerText;
-    const comment = row.querySelector('.comment-cell').innerText;
+    function editTransaction(id) {
+        editingTransactionId = id;
+        const row = document.querySelector(`tr[data-id="${id}"]`);
+        const categoryId = row.querySelector('.category-cell').dataset.categoryId;
+        const amount = row.querySelector('.amount-cell').innerText.replace(/[+-]/g, '').trim();
+        const date = row.querySelector('.date-cell').innerText.split('.').reverse().join('-');
+        const time = row.querySelector('.time-cell').innerText;
+        const comment = row.querySelector('.comment-cell').innerText;
 
-    document.getElementById('edit_category_id').value = categoryId;
-    document.getElementById('edit_amount').value = amount;
-    document.getElementById('edit_date').value = date;
-    document.getElementById('edit_time').value = time !== '—' ? time : '12:00';
-    document.getElementById('edit_comment').value = comment !== '—' ? comment : '';
+        document.getElementById('edit_category_id').value = categoryId;
+        document.getElementById('edit_amount').value = amount;
+        document.getElementById('edit_date').value = date;
+        document.getElementById('edit_time').value = time !== '—' ? time : '12:00';
+        document.getElementById('edit_comment').value = comment !== '—' ? comment : '';
 
-    document.getElementById('editTransactionModal').classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeEditModal() {
-    document.getElementById('editTransactionModal').classList.remove('active');
-    document.body.style.overflow = '';
-    editingTransactionId = null;
-}
-
-function closeEditModalOnOverlay(event) {
-    if (event.target === event.currentTarget) {
-        closeEditModal();
-    }
-}
-
-function saveTransactionEdit() {
-    const categoryId = document.getElementById('edit_category_id').value;
-    const amount = document.getElementById('edit_amount').value;
-    const date = document.getElementById('edit_date').value;
-    const time = document.getElementById('edit_time').value;
-    const comment = document.getElementById('edit_comment').value;
-
-    if (!categoryId || !amount || !date) {
-        showFlash('Заполните обязательные поля', 'warning');
-        return;
+        document.getElementById('editTransactionModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
     }
 
-    fetch(`/transaction/${editingTransactionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            category_id: parseInt(categoryId),
-            amount: parseFloat(amount),
-            date: date,
-            time: time,
-            comment: comment
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showFlash('Транзакция обновлена', 'success');
+    function closeEditModal() {
+        document.getElementById('editTransactionModal').classList.remove('active');
+        document.body.style.overflow = '';
+        editingTransactionId = null;
+    }
+
+    function closeEditModalOnOverlay(event) {
+        if (event.target === event.currentTarget) {
             closeEditModal();
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showFlash('Ошибка: ' + data.error, 'danger');
         }
-    });
-}
+    }
 
-function deleteTransaction(id) {
-    showConfirm(
-        'Удалить транзакцию? Это действие нельзя отменить.',
-        'Удаление транзакции',
-        function() {
-            fetch(`/transaction/${id}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showFlash('Транзакция удалена', 'success');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showFlash('Ошибка: ' + data.error, 'danger');
-                }
-            });
+    function saveTransactionEdit() {
+        const categoryId = document.getElementById('edit_category_id').value;
+        const amount = document.getElementById('edit_amount').value;
+        const date = document.getElementById('edit_date').value;
+        const time = document.getElementById('edit_time').value;
+        const comment = document.getElementById('edit_comment').value;
+
+        if (!categoryId || !amount || !date) {
+            showFlash('Заполните обязательные поля', 'warning');
+            return;
         }
-    );
-}
+
+        fetch(`/transaction/${editingTransactionId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: parseInt(categoryId),
+                amount: parseFloat(amount),
+                date: date,
+                time: time,
+                comment: comment
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showFlash('Транзакция обновлена', 'success');
+                closeEditModal();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showFlash('Ошибка: ' + data.error, 'danger');
+            }
+        });
+    }
+
+    function deleteTransaction(id) {
+        showConfirm(
+            'Удалить транзакцию? Это действие нельзя отменить.',
+            'Удаление транзакции',
+            function() {
+                fetch(`/transaction/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showFlash('Транзакция удалена', 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                    }
+                });
+            }
+        );
+    }
 </script>
 {% endblock %}

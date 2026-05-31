@@ -11,6 +11,7 @@
                 <label for="cat_name">Название</label>
                 <input type="text" id="cat_name" required>
             </div>
+
             <div class="form-group">
                 <label for="cat_type">Тип</label>
                 <select id="cat_type">
@@ -18,6 +19,7 @@
                     <option value="Доход">Доход</option>
                 </select>
             </div>
+
             <div class="form-group">
                 <label for="cat_parent">Родительская категория</label>
                 <select id="cat_parent">
@@ -27,6 +29,7 @@
                     {% endfor %}
                 </select>
             </div>
+
             <div class="form-group">
                 <label>Цвет категории</label>
                 <div class="color-selector-wrapper">
@@ -39,6 +42,7 @@
                     </button>
                 </div>
             </div>
+
             <button type="submit" class="btn btn-primary w-full">Создать категорию</button>
         </form>
     </div>
@@ -49,297 +53,205 @@
         <div class="category-tree" id="categoryTree"></div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let selectedColor = '#ff7a00';
-let draggedItem = null;
-let dragOverItem = null;
-let dragOverPosition = null;
+    let selectedColor = '#ff7a00';
+    let draggedItem = null;
+    let dragOverItem = null;
+    let dragOverPosition = null;
+    let dragSourceId = null;
 
-const categoryData = {{ categories | tojson | safe }};
+    const categoryData = {{ categories | tojson | safe }};
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function renderCategoryHTML(cat, level = 0) {
-    // Сортируем детей по имени перед рендерингом
-    const sortedChildren = cat.children ? [...cat.children].sort((a, b) =>
-        a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-    ) : [];
-
-    const hasChildren = sortedChildren.length > 0;
-
-    let html = `
-        <div class="category-item" data-id="${cat.id}" data-level="${level}" draggable="true">
-            <div class="category-info">
-                <div class="category-color-badge" style="background: ${cat.color};"></div>
-                <span class="category-name">${escapeHtml(cat.name)}</span>
-                <span class="badge badge-${cat.type === 'Расход' ? 'warning' : 'success'}">${cat.type}</span>
-            </div>
-            <div class="category-actions">
-                <button onclick="editCategoryColor(${cat.id}, '${cat.color}')" title="Изменить цвет">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-                    </svg>
-                </button>
-                <button onclick="editCategoryName(${cat.id}, '${escapeHtml(cat.name)}')" title="Переименовать">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 3l4 4-7 7H10v-4l7-7z"></path>
-                        <path d="M4 20h16"></path>
-                    </svg>
-                </button>
-                <button onclick="deleteCategory(${cat.id}, ${hasChildren})" title="Удалить">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18"></path>
-                        <path d="M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-        </div>`;
-
-    if (hasChildren) {
-        html += `<div class="category-children" data-parent-id="${cat.id}">`;
-        for (let child of sortedChildren) {
-            html += renderCategoryHTML(child, level + 1);
-        }
-        html += `</div>`;
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
-    return html;
-}
-
-// В начале renderTree() сортируем корневые категории
-function renderTree() {
-    const container = document.getElementById('categoryTree');
-    if (container && categoryData.length > 0) {
-        // Сортируем корневые категории по имени
-        const sortedRoot = [...categoryData].sort((a, b) =>
+    function renderCategoryHTML(cat, level = 0) {
+        const sortedChildren = cat.children ? [...cat.children].sort((a, b) =>
             a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-        );
+        ) : [];
 
-        let html = '';
-        for (let cat of sortedRoot) {
-            html += renderCategoryHTML(cat, 0);
+        const hasChildren = sortedChildren.length > 0;
+
+        let html = `
+            <div class="category-item" data-id="${cat.id}" data-level="${level}" draggable="true">
+                <div class="category-info">
+                    <div class="category-color-badge" style="background: ${cat.color};"></div>
+                    <span class="category-name">${escapeHtml(cat.name)}</span>
+                    <span class="badge badge-${cat.type === 'Расход' ? 'warning' : 'success'}">${cat.type}</span>
+                </div>
+                <div class="category-actions">
+                    <button onclick="editCategoryColor(${cat.id}, '${cat.color}')" title="Изменить цвет">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        </svg>
+                    </button>
+                    <button onclick="editCategoryName(${cat.id}, '${escapeHtml(cat.name)}')" title="Переименовать">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 3l4 4-7 7H10v-4l7-7z"></path>
+                            <path d="M4 20h16"></path>
+                        </svg>
+                    </button>
+                    <button onclick="deleteCategory(${cat.id}, ${hasChildren})" title="Удалить">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18"></path>
+                            <path d="M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        if (hasChildren) {
+            html += `<div class="category-children" data-parent-id="${cat.id}">`;
+            for (let child of sortedChildren) {
+                html += renderCategoryHTML(child, level + 1);
+            }
+            html += `</div>`;
         }
-        container.innerHTML = html;
-        initDragAndDrop();
-    } else if (container) {
-        container.innerHTML = '<div class="text-center text-secondary">Нет категорий</div>';
-    }
-}
 
-function initDragAndDrop() {
-    const draggables = document.querySelectorAll('.category-item');
-    const containers = document.querySelectorAll('.category-tree, .category-children');
-
-    draggables.forEach(draggable => {
-        draggable.addEventListener('dragstart', handleDragStart);
-        draggable.addEventListener('dragend', handleDragEnd);
-        draggable.addEventListener('dragover', handleDragOver);
-        draggable.addEventListener('dragleave', handleDragLeave);
-        draggable.addEventListener('drop', handleDrop);
-    });
-
-    containers.forEach(container => {
-        container.addEventListener('dragover', (e) => e.preventDefault());
-    });
-}
-
-let dragSourceId = null;
-
-function handleDragStart(e) {
-    dragSourceId = parseInt(e.target.closest('.category-item').dataset.id);
-    e.target.closest('.category-item').classList.add('dragging');
-    e.dataTransfer.setData('text/plain', dragSourceId);
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragEnd(e) {
-    document.querySelectorAll('.category-item').forEach(el => {
-        el.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
-    });
-    dragSourceId = null;
-}
-
-function handleDragOver(e) {
-    e.preventDefault();
-    const target = e.target.closest('.category-item');
-    if (!target || parseInt(target.dataset.id) === dragSourceId) return;
-
-    e.dataTransfer.dropEffect = 'move';
-
-    const rect = target.getBoundingClientRect();
-    const mouseY = e.clientY;
-    const threshold = rect.top + rect.height / 3;
-    const thresholdBottom = rect.bottom - rect.height / 3;
-
-    target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
-
-    if (mouseY < threshold) {
-        target.classList.add('drag-over-before');
-        dragOverPosition = 'before';
-    } else if (mouseY > thresholdBottom) {
-        target.classList.add('drag-over-after');
-        dragOverPosition = 'after';
-    } else {
-        target.classList.add('drag-over');
-        dragOverPosition = 'inside';
+        return html;
     }
 
-    dragOverItem = target;
-}
+    function renderTree() {
+        const container = document.getElementById('categoryTree');
+        if (container && categoryData.length > 0) {
+            const sortedRoot = [...categoryData].sort((a, b) =>
+                a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+            );
 
-function handleDragLeave(e) {
-    const target = e.target.closest('.category-item');
-    if (target) {
+            let html = '';
+            for (let cat of sortedRoot) {
+                html += renderCategoryHTML(cat, 0);
+            }
+            container.innerHTML = html;
+            initDragAndDrop();
+        } else if (container) {
+            container.innerHTML = '<div class="text-center text-secondary">Нет категорий</div>';
+        }
+    }
+
+    function initDragAndDrop() {
+        const draggables = document.querySelectorAll('.category-item');
+        const containers = document.querySelectorAll('.category-tree, .category-children');
+
+        draggables.forEach(draggable => {
+            draggable.addEventListener('dragstart', handleDragStart);
+            draggable.addEventListener('dragend', handleDragEnd);
+            draggable.addEventListener('dragover', handleDragOver);
+            draggable.addEventListener('dragleave', handleDragLeave);
+            draggable.addEventListener('drop', handleDrop);
+        });
+
+        containers.forEach(container => {
+            container.addEventListener('dragover', (e) => e.preventDefault());
+        });
+    }
+
+    function handleDragStart(e) {
+        dragSourceId = parseInt(e.target.closest('.category-item').dataset.id);
+        e.target.closest('.category-item').classList.add('dragging');
+        e.dataTransfer.setData('text/plain', dragSourceId);
+        e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragEnd(e) {
+        document.querySelectorAll('.category-item').forEach(el => {
+            el.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
+        });
+        dragSourceId = null;
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        const target = e.target.closest('.category-item');
+        if (!target || parseInt(target.dataset.id) === dragSourceId) return;
+
+        e.dataTransfer.dropEffect = 'move';
+
+        const rect = target.getBoundingClientRect();
+        const mouseY = e.clientY;
+        const threshold = rect.top + rect.height / 3;
+        const thresholdBottom = rect.bottom - rect.height / 3;
+
         target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+
+        if (mouseY < threshold) {
+            target.classList.add('drag-over-before');
+            dragOverPosition = 'before';
+        } else if (mouseY > thresholdBottom) {
+            target.classList.add('drag-over-after');
+            dragOverPosition = 'after';
+        } else {
+            target.classList.add('drag-over');
+            dragOverPosition = 'inside';
+        }
+
+        dragOverItem = target;
     }
-}
 
-function handleDrop(e) {
-    e.preventDefault();
-    const targetItem = e.target.closest('.category-item');
-    if (!targetItem || !dragSourceId || parseInt(targetItem.dataset.id) === dragSourceId) return;
-
-    const targetId = parseInt(targetItem.dataset.id);
-    const position = dragOverPosition;
-
-    // Очищаем стили
-    document.querySelectorAll('.category-item').forEach(el => {
-        el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
-    });
-
-    // Отправляем запрос на перемещение
-    fetch('/category/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            category_id: dragSourceId,
-            target_id: targetId,
-            position: position
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showFlash('Категория перемещена', 'success');
-            location.reload();
-        } else {
-            showFlash('Ошибка: ' + data.error, 'danger');
+    function handleDragLeave(e) {
+        const target = e.target.closest('.category-item');
+        if (target) {
+            target.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
         }
-    })
-    .catch(error => {
-        showFlash('Ошибка сервера', 'danger');
-    });
-}
+    }
 
-function openColorPickerForCategory() {
-    openColorPicker(selectedColor, function(color) {
-        selectedColor = color;
-        document.getElementById('categoryColorDisplay').style.background = color;
-        document.getElementById('categoryColorDisplay').style.boxShadow = `0 2px 8px ${color}60`;
-    });
-}
+    function handleDrop(e) {
+        e.preventDefault();
+        const targetItem = e.target.closest('.category-item');
+        if (!targetItem || !dragSourceId || parseInt(targetItem.dataset.id) === dragSourceId) return;
 
-function openColorPickerForEdit(categoryId, currentColor) {
-    openColorPicker(currentColor, function(color) {
-        updateCategoryColor(categoryId, color);
-    });
-}
+        const targetId = parseInt(targetItem.dataset.id);
+        const position = dragOverPosition;
 
-function updateCategoryColor(id, color) {
-    fetch(`/category/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ color: color })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showFlash('Цвет категории обновлён', 'success');
-            location.reload();
-        } else {
-            showFlash('Ошибка: ' + data.error, 'danger');
-        }
-    });
-}
+        document.querySelectorAll('.category-item').forEach(el => {
+            el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+        });
 
-// Добавление категории
-document.getElementById('addCategoryForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const data = {
-        name: document.getElementById('cat_name').value,
-        type: document.getElementById('cat_type').value,
-        color: selectedColor,
-        parent_id: document.getElementById('cat_parent').value || null
-    };
-
-    fetch('{{ url_for("main.add_category") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.id) {
-            showFlash('Категория добавлена', 'success');
-            location.reload();
-        } else {
-            showFlash('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'danger');
-        }
-    })
-    .catch(error => {
-        showFlash('Ошибка сервера', 'danger');
-    });
-});
-
-function deleteCategory(id, hasChildren) {
-    showDeleteCategoryModal(id, hasChildren, function(categoryId, action) {
-        fetch(`/category/${categoryId}`, {
-            method: 'DELETE',
+        fetch('/category/move', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: action })
+            body: JSON.stringify({
+                category_id: dragSourceId,
+                target_id: targetId,
+                position: position
+            })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showFlash('Категория удалена', 'success');
+                showFlash('Категория перемещена', 'success');
                 location.reload();
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');
             }
-        });
-    });
-}
-
-function editCategoryName(id, currentName) {
-    openRenameModal(id, currentName, function(categoryId, newName) {
-        fetch(`/category/${categoryId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newName })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showFlash('Категория переименована', 'success');
-                location.reload();
-            } else {
-                showFlash('Ошибка: ' + data.error, 'danger');
-            }
+        .catch(error => {
+            showFlash('Ошибка сервера', 'danger');
         });
-    });
-}
+    }
 
-function editCategoryColor(id, currentColor) {
-    openColorPicker(currentColor, function(color) {
+    function openColorPickerForCategory() {
+        openColorPicker(selectedColor, function(color) {
+            selectedColor = color;
+            document.getElementById('categoryColorDisplay').style.background = color;
+            document.getElementById('categoryColorDisplay').style.boxShadow = `0 2px 8px ${color}60`;
+        });
+    }
+
+    function editCategoryColor(id, currentColor) {
+        openColorPicker(currentColor, function(color) {
+            updateCategoryColor(id, color);
+        });
+    }
+
+    function updateCategoryColor(id, color) {
         fetch(`/category/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -348,18 +260,83 @@ function editCategoryColor(id, currentColor) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showFlash('Цвет категории изменён', 'success');
+                showFlash('Цвет категории обновлён', 'success');
                 location.reload();
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');
             }
         });
-    });
-}
+    }
 
-// Отрисовка дерева категорий
-document.addEventListener('DOMContentLoaded', function() {
-    renderTree();
-});
+    document.getElementById('addCategoryForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const data = {
+            name: document.getElementById('cat_name').value,
+            type: document.getElementById('cat_type').value,
+            color: selectedColor,
+            parent_id: document.getElementById('cat_parent').value || null
+        };
+
+        fetch('{{ url_for("main.add_category") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.id) {
+                showFlash('Категория добавлена', 'success');
+                location.reload();
+            } else {
+                showFlash('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'danger');
+            }
+        })
+        .catch(error => {
+            showFlash('Ошибка сервера', 'danger');
+        });
+    });
+
+    function deleteCategory(id, hasChildren) {
+        showDeleteCategoryModal(id, hasChildren, function(categoryId, action) {
+            fetch(`/category/${categoryId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Категория удалена', 'success');
+                    location.reload();
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        });
+    }
+
+    function editCategoryName(id, currentName) {
+        openRenameModal(id, currentName, function(categoryId, newName) {
+            fetch(`/category/${categoryId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showFlash('Категория переименована', 'success');
+                    location.reload();
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        renderTree();
+    });
 </script>
 {% endblock %}

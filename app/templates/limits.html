@@ -8,7 +8,7 @@
     <div class="card">
         <h3 class="card-title">Личные лимиты</h3>
         <p class="text-secondary" style="font-size: 0.85rem; margin-bottom: 16px;">Лимиты на ваши личные расходы</p>
-        
+
         <div class="table-container">
             <div class="table-wrapper">
                 <table>
@@ -34,8 +34,7 @@
                             </td>
                             <td>
                                 <div class="progress" style="width: 100px;">
-                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}"
-                                         style="width: {{ limit.percent }}%"></div>
+                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}" style="width: {{ limit.percent }}%"></div>
                                 </div>
                                 {% if limit.is_exceeded %}
                                 <div class="exceeded-warning" style="font-size: 0.65rem; margin-top: 4px;">
@@ -66,7 +65,7 @@
                 </table>
             </div>
         </div>
-        
+
         <div class="mt-3">
             <button class="btn btn-primary w-full" onclick="openLimitModal('personal')">+ Добавить личный лимит</button>
         </div>
@@ -77,7 +76,7 @@
     <div class="card">
         <h3 class="card-title">Семейные лимиты</h3>
         <p class="text-secondary" style="font-size: 0.85rem; margin-bottom: 16px;">Общие лимиты для всей семьи</p>
-        
+
         <div class="table-container">
             <div class="table-wrapper">
                 <table>
@@ -104,8 +103,7 @@
                             </td>
                             <td>
                                 <div class="progress" style="width: 100px;">
-                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}"
-                                         style="width: {{ limit.percent }}%"></div>
+                                    <div class="progress-bar {% if limit.percent > 90 %}warning{% endif %} {% if limit.is_exceeded %}danger{% endif %}" style="width: {{ limit.percent }}%"></div>
                                 </div>
                                 {% if limit.is_exceeded %}
                                 <div class="exceeded-warning" style="font-size: 0.65rem; margin-top: 4px;">
@@ -140,7 +138,7 @@
                 </table>
             </div>
         </div>
-        
+
         <div class="mt-3">
             <button class="btn btn-primary w-full" onclick="openLimitModal('family')">+ Добавить семейный лимит</button>
         </div>
@@ -180,104 +178,102 @@
 </div>
 
 <script>
-let currentLimitType = null;
-let currentEditCategoryId = null;
+    let currentLimitType = null;
+    let currentEditCategoryId = null;
 
-function openLimitModal(type) {
-    currentLimitType = type;
-    currentEditCategoryId = null;
-    document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Добавить личный лимит' : 'Добавить семейный лимит';
-    document.getElementById('edit_limit_category_id').value = '';
-    document.getElementById('edit_limit_amount').value = '';
-    document.getElementById('limitEditModal').classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function editLimit(type, categoryId, currentAmount) {
-    currentLimitType = type;
-    currentEditCategoryId = categoryId;
-    document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Редактировать личный лимит' : 'Редактировать семейный лимит';
-    document.getElementById('edit_limit_category_id').value = categoryId;
-    document.getElementById('edit_limit_amount').value = currentAmount;
-    document.getElementById('limitEditModal').classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeLimitEditModal() {
-    document.getElementById('limitEditModal').classList.remove('active');
-    document.body.style.overflow = '';
-    currentLimitType = null;
-    currentEditCategoryId = null;
-}
-
-function closeLimitEditModalOnOverlay(event) {
-    if (event.target === event.currentTarget) {
-        closeLimitEditModal();
+    function openLimitModal(type) {
+        currentLimitType = type;
+        currentEditCategoryId = null;
+        document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Добавить личный лимит' : 'Добавить семейный лимит';
+        document.getElementById('edit_limit_category_id').value = '';
+        document.getElementById('edit_limit_amount').value = '';
+        document.getElementById('limitEditModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
     }
-}
 
-function saveLimitEdit() {
-    const categoryId = document.getElementById('edit_limit_category_id').value;
-    const amount = document.getElementById('edit_limit_amount').value;
-    
-    if (!categoryId || !amount) {
-        showFlash('Заполните все поля', 'warning');
-        return;
+    function editLimit(type, categoryId, currentAmount) {
+        currentLimitType = type;
+        currentEditCategoryId = categoryId;
+        document.getElementById('limitEditTitle').textContent = type === 'personal' ? 'Редактировать личный лимит' : 'Редактировать семейный лимит';
+        document.getElementById('edit_limit_category_id').value = categoryId;
+        document.getElementById('edit_limit_amount').value = currentAmount;
+        document.getElementById('limitEditModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
     }
-    
-    const url = currentEditCategoryId 
-        ? '/set-limit'  // PUT через тот же маршрут
-        : '/set-limit';
-    
-    fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            category_id: parseInt(categoryId),
-            limit_type: currentLimitType,
-            amount: parseFloat(amount)
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showFlash('Лимит сохранён', 'success');
+
+    function closeLimitEditModal() {
+        document.getElementById('limitEditModal').classList.remove('active');
+        document.body.style.overflow = '';
+        currentLimitType = null;
+        currentEditCategoryId = null;
+    }
+
+    function closeLimitEditModalOnOverlay(event) {
+        if (event.target === event.currentTarget) {
             closeLimitEditModal();
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showFlash('Ошибка: ' + data.error, 'danger');
         }
-    });
-}
+    }
 
-function deleteLimit(type, categoryId) {
-    showConfirm(
-        'Удалить лимит?',
-        'Удаление лимита',
-        function() {
-            fetch('/delete-limit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    limit_type: type,
-                    category_id: categoryId
-                })
+    function saveLimitEdit() {
+        const categoryId = document.getElementById('edit_limit_category_id').value;
+        const amount = document.getElementById('edit_limit_amount').value;
+
+        if (!categoryId || !amount) {
+            showFlash('Заполните все поля', 'warning');
+            return;
+        }
+
+        const url = '/set-limit';
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: parseInt(categoryId),
+                limit_type: currentLimitType,
+                amount: parseFloat(amount)
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showFlash('Лимит удалён', 'success');
-                    location.reload();
-                } else {
-                    showFlash('Ошибка: ' + data.error, 'danger');
-                }
-            });
-        }
-    );
-}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showFlash('Лимит сохранён', 'success');
+                closeLimitEditModal();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showFlash('Ошибка: ' + data.error, 'danger');
+            }
+        });
+    }
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeLimitEditModal();
-});
+    function deleteLimit(type, categoryId) {
+        showConfirm(
+            'Удалить лимит?',
+            'Удаление лимита',
+            function() {
+                fetch('/delete-limit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        limit_type: type,
+                        category_id: categoryId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showFlash('Лимит удалён', 'success');
+                        location.reload();
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                    }
+                });
+            }
+        );
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeLimitEditModal();
+    });
 </script>
 {% endblock %}

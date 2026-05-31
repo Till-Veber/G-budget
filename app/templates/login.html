@@ -6,22 +6,27 @@
 <div class="grid-2" style="max-width: 1200px; margin: 0 auto; align-items: center; min-height: 80vh;">
     <div class="card" style="animation-delay: 0.1s;">
         <h2 class="card-title" style="font-size: 2rem; margin-bottom: 32px;">Добро пожаловать</h2>
+
         <form method="POST">
             <div class="form-group">
                 <label for="login">Логин</label>
                 <input type="text" id="login" name="login" required placeholder="Введите ваш логин">
             </div>
+
             <div class="form-group">
                 <label for="password">Пароль</label>
                 <input type="password" id="password" name="password" required placeholder="Введите пароль">
             </div>
+
             <button type="submit" class="btn btn-primary w-full">Войти</button>
         </form>
+
         <div class="text-center mt-4">
             <span class="text-secondary">Нет аккаунта?</span>
             <a href="{{ url_for('main.register') }}" class="text-accent" style="text-decoration: none;">Зарегистрироваться</a>
         </div>
     </div>
+
     <div class="card" style="animation-delay: 0.2s;">
         <h3 class="card-title">Управляйте семейным бюджетом вместе</h3>
         <ul style="list-style: none; margin-top: 24px;">

@@ -6,10 +6,12 @@
 <div class="card text-center" style="max-width: 600px; margin: 50px auto;">
     <h2 class="card-title">Вы ещё не состоите в семье</h2>
     <p class="text-secondary" style="margin: 16px 0;">Создайте новую семью или примите приглашение</p>
+
     <div class="flex gap-2 justify-center">
         <a href="{{ url_for('main.create_family') }}" class="btn btn-primary">Создать семью</a>
         <button class="btn btn-secondary" onclick="showInviteForm()">Ввести код приглашения</button>
     </div>
+
     <div id="inviteForm" style="display: none; margin-top: 24px;">
         <form method="POST" action="{{ url_for('main.join_family_by_code') }}">
             <input type="text" name="invite_code" placeholder="Введите код" style="width: 200px;">
@@ -17,9 +19,10 @@
         </form>
     </div>
 </div>
+
 <script>
-function showInviteForm() {
-    document.getElementById('inviteForm').style.display = 'block';
-}
+    function showInviteForm() {
+        document.getElementById('inviteForm').style.display = 'block';
+    }
 </script>
 {% endblock %}

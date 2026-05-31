@@ -15,6 +15,7 @@
                     <option value="income">Доходы</option>
                 </select>
             </div>
+
             <div class="form-group">
                 <label for="group_by">Группировать по</label>
                 <select id="group_by" name="group_by">
@@ -22,6 +23,7 @@
                     <option value="user">Пользователям</option>
                 </select>
             </div>
+
             <div class="form-group">
                 <label for="period_type">Период</label>
                 <select id="period_type" name="period_type">
@@ -145,510 +147,496 @@
 <div id="donut-tooltip" class="donut-tooltip"></div>
 
 <script>
-let currentReportData = null;
-let currentDateOffset = 0;
-let currentPeriodType = 'month';
-let currentCategoryId = null;
-let categoryStack = [];
+    let currentReportData = null;
+    let currentDateOffset = 0;
+    let currentPeriodType = 'month';
+    let currentCategoryId = null;
+    let categoryStack = [];
 
-document.getElementById('reportForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    currentDateOffset = 0;
-    currentCategoryId = null;
-    categoryStack = [];
-    await loadReport();
-});
+    document.getElementById('reportForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        currentDateOffset = 0;
+        currentCategoryId = null;
+        categoryStack = [];
+        await loadReport();
+    });
 
-document.getElementById('group_by').addEventListener('change', (e) => {
-    const groupBy = e.target.value;
-    const categoryContainer = document.getElementById('categoryChartContainer');
-    const userContainer = document.getElementById('userChartContainer');
-    if (groupBy === 'user') {
-        categoryContainer.style.display = 'none';
-        userContainer.style.display = 'block';
-    } else {
-        categoryContainer.style.display = 'block';
-        userContainer.style.display = 'none';
+    document.getElementById('group_by').addEventListener('change', (e) => {
+        const groupBy = e.target.value;
+        const categoryContainer = document.getElementById('categoryChartContainer');
+        const userContainer = document.getElementById('userChartContainer');
+
+        if (groupBy === 'user') {
+            categoryContainer.style.display = 'none';
+            userContainer.style.display = 'block';
+        } else {
+            categoryContainer.style.display = 'block';
+            userContainer.style.display = 'none';
+        }
+        loadReport();
+    });
+
+    document.getElementById('period_type').addEventListener('change', (e) => {
+        const periodType = e.target.value;
+        const customPeriod = document.getElementById('customPeriod');
+        const periodNavigation = document.getElementById('periodNavigation');
+
+        currentPeriodType = periodType;
+        currentDateOffset = 0;
+
+        if (periodType === 'custom') {
+            customPeriod.style.display = 'block';
+            periodNavigation.style.display = 'none';
+        } else {
+            customPeriod.style.display = 'none';
+            periodNavigation.style.display = 'flex';
+            updatePeriodLabel();
+            loadReport();
+        }
+    });
+
+    document.getElementById('prevPeriodBtn').addEventListener('click', () => {
+        currentDateOffset--;
+        updatePeriodLabel();
+        currentCategoryId = null;
+        categoryStack = [];
+        loadReport();
+    });
+
+    document.getElementById('nextPeriodBtn').addEventListener('click', () => {
+        currentDateOffset++;
+        updatePeriodLabel();
+        currentCategoryId = null;
+        categoryStack = [];
+        loadReport();
+    });
+
+    function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
-    loadReport();
-});
 
-document.getElementById('period_type').addEventListener('change', (e) => {
-    const periodType = e.target.value;
-    const customPeriod = document.getElementById('customPeriod');
-    const periodNavigation = document.getElementById('periodNavigation');
+    function formatDateDisplay(date) {
+        return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
+    }
 
-    currentPeriodType = periodType;
-    currentDateOffset = 0;
+    function updatePeriodLabel() {
+        const today = new Date();
+        let label = '';
+        let dateStart = null;
+        let dateEnd = null;
 
-    if (periodType === 'custom') {
-        customPeriod.style.display = 'block';
-        periodNavigation.style.display = 'none';
-    } else {
-        customPeriod.style.display = 'none';
-        periodNavigation.style.display = 'flex';
+        if (currentPeriodType === 'week') {
+            const currentDate = new Date(today);
+            currentDate.setDate(today.getDate() + (currentDateOffset * 7));
+            const dayOfWeek = currentDate.getDay();
+            const startOfWeek = new Date(currentDate);
+            startOfWeek.setDate(currentDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+            label = `${formatDateDisplay(startOfWeek)} - ${formatDateDisplay(endOfWeek)}`;
+            dateStart = startOfWeek;
+            dateEnd = endOfWeek;
+        } else if (currentPeriodType === 'month') {
+            const currentDate = new Date(today.getFullYear(), today.getMonth() + currentDateOffset, 1);
+            dateStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            dateEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            label = `${monthNames[dateStart.getMonth()]} ${dateStart.getFullYear()}`;
+        } else if (currentPeriodType === 'quarter') {
+            let totalMonthOffset = today.getMonth() + currentDateOffset * 3;
+            let year = today.getFullYear();
+            while (totalMonthOffset < 0) { totalMonthOffset += 12; year--; }
+            while (totalMonthOffset >= 12) { totalMonthOffset -= 12; year++; }
+            const quarterStartMonth = Math.floor(totalMonthOffset / 3) * 3;
+            dateStart = new Date(year, quarterStartMonth, 1);
+            dateEnd = new Date(year, quarterStartMonth + 3, 0);
+            label = `${dateStart.getFullYear()}, ${Math.floor(quarterStartMonth / 3) + 1}-й квартал`;
+        } else if (currentPeriodType === 'year') {
+            const year = today.getFullYear() + currentDateOffset;
+            dateStart = new Date(year, 0, 1);
+            dateEnd = new Date(year, 11, 31);
+            label = `${year} год`;
+        }
+
+        document.getElementById('currentPeriodLabel').textContent = label;
+        window.currentDateStart = formatDate(dateStart);
+        window.currentDateEnd = formatDate(dateEnd);
+    }
+
+    async function loadReport(categoryId = null, isBackNavigation = false) {
+        const reportType = document.getElementById('report_type').value;
+        const groupBy = document.getElementById('group_by').value;
+        const periodType = document.getElementById('period_type').value;
+
+        let dateStart, dateEnd;
+
+        if (periodType === 'custom') {
+            dateStart = document.getElementById('date_start').value;
+            dateEnd = document.getElementById('date_end').value;
+            if (!dateStart || !dateEnd) {
+                showFlash('Выберите период', 'warning');
+                return;
+            }
+        } else {
+            dateStart = window.currentDateStart;
+            dateEnd = window.currentDateEnd;
+        }
+
+        let url = `/api/report-data?report_type=${reportType}&date_start=${dateStart}&date_end=${dateEnd}&group_by=${groupBy}`;
+        if (categoryId !== undefined && groupBy === 'category') {
+            url += `&category_id=${categoryId || ''}`;
+        }
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                showFlash(data.error, 'danger');
+                return;
+            }
+
+            currentReportData = data;
+            updateSummary(data);
+
+            const titles = {
+                'expenses': 'Расходы по категориям',
+                'income': 'Доходы по категориям'
+            };
+            document.getElementById('chartTitle').textContent = titles[reportType] || 'Распределение';
+
+            if (groupBy === 'user') {
+                renderUserDonutChart(data);
+                updateTable(data, groupBy);
+            } else {
+                if (!isBackNavigation && categoryId !== null && categoryId !== currentCategoryId) {
+                    if (currentCategoryId !== null) categoryStack.push(currentCategoryId);
+                } else if (categoryId === null) {
+                    categoryStack = [];
+                }
+                currentCategoryId = data.current_category_id;
+
+                renderCategoryDonutChart(data);
+                updateTable(data, groupBy);
+
+                const backButton = document.getElementById('backButton');
+                const pathSpan = document.getElementById('currentCategoryPath');
+
+                if (data.current_category_name) {
+                    pathSpan.textContent = data.current_category_name;
+                    backButton.style.display = 'inline-flex';
+                } else {
+                    pathSpan.textContent = 'Все категории';
+                    backButton.style.display = 'none';
+                }
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showFlash('Ошибка загрузки отчёта', 'danger');
+        }
+    }
+
+    function goBack() {
+        if (categoryStack.length > 0) {
+            const parentId = categoryStack.pop();
+            loadReport(parentId, true);
+        } else {
+            loadReport(null, true);
+        }
+    }
+
+    function renderCategoryDonutChart(data) {
+        const circumference = 1130.97;
+        const segmentsGroup = document.getElementById('donutSegments');
+        const totalText = document.getElementById('donutTotal');
+        const legendDiv = document.getElementById('chartLegend');
+
+        let items = data.items || [];
+        let total = data.total || 0;
+
+        segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
+        legendDiv.innerHTML = '';
+
+        if (!items.length || total === 0) {
+            totalText.textContent = '0 ₽';
+            legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+            return;
+        }
+
+        totalText.textContent = Math.round(total) + ' ₽';
+
+        const oldStyle = document.getElementById('report-donut-styles');
+        if (oldStyle) oldStyle.remove();
+
+        const style = document.createElement('style');
+        style.id = 'report-donut-styles';
+
+        let cumulativeOffset = 0;
+
+        items.forEach((item, index) => {
+            const percent = (item.value / total) * 100;
+            const length = (percent / 100) * circumference;
+            const segmentClass = `report-segment-${Date.now()}-${index}`;
+            const color = item.color || '#6c757d';
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', '250');
+            circle.setAttribute('cy', '250');
+            circle.setAttribute('r', '180');
+            circle.setAttribute('fill', 'none');
+            circle.setAttribute('stroke', color);
+            circle.setAttribute('stroke-width', '40');
+            circle.setAttribute('data-name', item.name);
+            circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
+            circle.setAttribute('data-id', item.id || '');
+            circle.setAttribute('data-has-children', item.has_children);
+
+            circle.classList.add('donut-segment', segmentClass);
+            circle.style.strokeDasharray = `${length} ${circumference}`;
+            circle.style.strokeDashoffset = -cumulativeOffset;
+            circle.style.transition = 'stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease, stroke-width 0.3s ease, filter 0.3s ease';
+
+            if (item.has_children && item.id !== null) {
+                circle.style.cursor = 'pointer';
+                circle.addEventListener('click', () => loadReport(item.id, false));
+            } else if (item.id === null) {
+                circle.style.cursor = 'default';
+            }
+
+            segmentsGroup.appendChild(circle);
+
+            style.textContent += `
+                .${segmentClass}:hover {
+                    stroke-width: 48px !important;
+                    filter: drop-shadow(0 0 25px ${color}) !important;
+                    cursor: ${item.has_children && item.id !== null ? 'pointer' : 'default'};
+                }
+            `;
+
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
+
+            if (item.has_children && item.id !== null) {
+                legendItem.style.cursor = 'pointer';
+                legendItem.addEventListener('click', () => loadReport(item.id, false));
+            } else if (item.id === null) {
+                legendItem.style.cursor = 'default';
+            }
+
+            legendDiv.appendChild(legendItem);
+            cumulativeOffset += length;
+        });
+
+        document.head.appendChild(style);
+
+        const tooltip = document.getElementById('donut-tooltip');
+        document.querySelectorAll('#donutSegments .donut-segment').forEach(seg => {
+            seg.addEventListener('mouseenter', (e) => {
+                tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
+                tooltip.classList.add('visible');
+            });
+            seg.addEventListener('mousemove', (e) => {
+                let x = e.clientX + 16, y = e.clientY - 16;
+                if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
+                if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
+                tooltip.style.left = `${x}px`;
+                tooltip.style.top = `${y}px`;
+            });
+            seg.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+        });
+    }
+
+    function renderUserDonutChart(data) {
+        const circumference = 1130.97;
+        const segmentsGroup = document.getElementById('userDonutSegments');
+        const totalText = document.getElementById('userDonutTotal');
+        const legendDiv = document.getElementById('userChartLegend');
+
+        const reportType = document.getElementById('report_type').value;
+        const titleText = reportType === 'expenses' ? 'Расходы по пользователям' : 'Доходы по пользователям';
+        document.querySelector('#userChartContainer .card-title').textContent = titleText;
+
+        let items = data.items || [];
+        let total = data.total || 0;
+
+        segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
+        legendDiv.innerHTML = '';
+
+        if (!items.length || total === 0) {
+            totalText.textContent = '0 ₽';
+            legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+            return;
+        }
+
+        totalText.textContent = Math.round(total) + ' ₽';
+
+        let cumulativeOffset = 0;
+        const userColors = [
+            '#ff7a00', '#10b981', '#3b82f6', '#8b5cf6',
+            '#f59e0b', '#ef4444', '#22c55e', '#06b6d4',
+            '#ec4899', '#84cc16', '#f97316', '#6366f1'
+        ];
+
+        const oldStyle = document.getElementById('userDonutStyles');
+        if (oldStyle) oldStyle.remove();
+
+        const style = document.createElement('style');
+        style.id = 'userDonutStyles';
+        style.textContent = `
+            .donut-segment {
+                transition: stroke-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+                cursor: pointer;
+            }
+        `;
+
+        for (let idx = 0; idx < items.length; idx++) {
+            const color = userColors[idx % userColors.length];
+            style.textContent += `
+                .donut-segment.seg-user-${idx}:hover {
+                    stroke-width: 48px;
+                    filter: drop-shadow(0 0 25px ${color});
+                }
+            `;
+        }
+        document.head.appendChild(style);
+
+        items.forEach((item, idx) => {
+            const percent = (item.value / total) * 100;
+            const length = (percent / 100) * circumference;
+            const color = userColors[idx % userColors.length];
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', '250');
+            circle.setAttribute('cy', '250');
+            circle.setAttribute('r', '180');
+            circle.setAttribute('fill', 'none');
+            circle.setAttribute('stroke', color);
+            circle.setAttribute('stroke-width', '40');
+            circle.setAttribute('data-name', item.name);
+            circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
+            circle.setAttribute('data-id', item.id);
+            circle.classList.add('donut-segment', `seg-user-${idx}`);
+
+            circle.style.strokeDasharray = `${length} ${circumference}`;
+            circle.style.strokeDashoffset = -cumulativeOffset;
+
+            segmentsGroup.appendChild(circle);
+
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
+            legendDiv.appendChild(legendItem);
+
+            cumulativeOffset += length;
+        });
+
+        const tooltip = document.getElementById('donut-tooltip');
+        document.querySelectorAll('#userDonutSegments .donut-segment').forEach(seg => {
+            seg.addEventListener('mouseenter', (e) => {
+                tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
+                tooltip.classList.add('visible');
+            });
+            seg.addEventListener('mousemove', (e) => {
+                let x = e.clientX + 16, y = e.clientY - 16;
+                if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
+                if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
+                tooltip.style.left = `${x}px`;
+                tooltip.style.top = `${y}px`;
+            });
+            seg.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+        });
+    }
+
+    function updateTable(data, groupBy) {
+        const tbody = document.getElementById('reportTableBody');
+        tbody.innerHTML = '';
+
+        let items = [];
+        let total = 0;
+
+        if (groupBy === 'category') {
+            items = data.items || [];
+            total = data.total || 0;
+        } else if (groupBy === 'user') {
+            items = data.items || [];
+            total = data.total || 0;
+        }
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-secondary">Нет данных</td></tr>';
+            return;
+        }
+
+        for (const item of items) {
+            const row = tbody.insertRow();
+            const value = item.value !== undefined ? item.value : item.total;
+            const percent = total > 0 ? (value / total) * 100 : 0;
+            row.insertCell(0).textContent = item.name;
+            row.insertCell(1).innerHTML = formatMoney(value);
+            row.insertCell(2).innerHTML = `${percent.toFixed(1)}%`;
+        }
+
+        const totalRow = tbody.insertRow();
+        totalRow.style.borderTop = '2px solid var(--border-primary)';
+        totalRow.style.fontWeight = '600';
+        totalRow.insertCell(0).textContent = 'ИТОГО';
+        totalRow.insertCell(1).innerHTML = formatMoney(total);
+        totalRow.insertCell(2).innerHTML = '100%';
+    }
+
+    function updateSummary(data) {
+        document.getElementById('summaryIncome').textContent = formatMoney(data.total_income);
+        document.getElementById('summaryExpense').textContent = formatMoney(data.total_expense);
+        const balance = data.total_income - data.total_expense;
+        document.getElementById('summaryBalance').textContent = formatMoney(balance);
+        document.getElementById('summaryBalance').style.color = balance >= 0 ? 'var(--success)' : 'var(--error)';
+    }
+
+    function formatMoney(value) {
+        return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + ' ₽';
+    }
+
+    function exportReport() {
+        if (!currentReportData) {
+            showFlash('Сначала сформируйте отчёт', 'warning');
+            return;
+        }
+
+        const reportType = document.getElementById('report_type').value;
+        const groupBy = document.getElementById('group_by').value;
+        const periodType = document.getElementById('period_type').value;
+
+        let dateStart, dateEnd;
+        if (periodType === 'custom') {
+            dateStart = document.getElementById('date_start').value;
+            dateEnd = document.getElementById('date_end').value;
+        } else {
+            dateStart = window.currentDateStart;
+            dateEnd = window.currentDateEnd;
+        }
+
+        const url = `/export-report?report_type=${reportType}&group_by=${groupBy}&date_start=${dateStart}&date_end=${dateEnd}`;
+        window.location.href = url;
+    }
+
+    function init() {
+        const today = new Date();
+        document.getElementById('date_start').value = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+        document.getElementById('date_end').value = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
         updatePeriodLabel();
         loadReport();
     }
-});
 
-document.getElementById('prevPeriodBtn').addEventListener('click', () => {
-    currentDateOffset--;
-    updatePeriodLabel();
-    currentCategoryId = null;
-    categoryStack = [];
-    loadReport();
-});
-
-document.getElementById('nextPeriodBtn').addEventListener('click', () => {
-    currentDateOffset++;
-    updatePeriodLabel();
-    currentCategoryId = null;
-    categoryStack = [];
-    loadReport();
-});
-
-function formatDate(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-function formatDateDisplay(date) {
-    return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
-}
-
-function updatePeriodLabel() {
-    const today = new Date();
-    let label = '';
-    let dateStart = null;
-    let dateEnd = null;
-
-    if (currentPeriodType === 'week') {
-        const currentDate = new Date(today);
-        currentDate.setDate(today.getDate() + (currentDateOffset * 7));
-        const dayOfWeek = currentDate.getDay();
-        const startOfWeek = new Date(currentDate);
-        startOfWeek.setDate(currentDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        label = `${formatDateDisplay(startOfWeek)} - ${formatDateDisplay(endOfWeek)}`;
-        dateStart = startOfWeek;
-        dateEnd = endOfWeek;
-    } else if (currentPeriodType === 'month') {
-        const currentDate = new Date(today.getFullYear(), today.getMonth() + currentDateOffset, 1);
-        dateStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        dateEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-        const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-        label = `${monthNames[dateStart.getMonth()]} ${dateStart.getFullYear()}`;
-    } else if (currentPeriodType === 'quarter') {
-        let totalMonthOffset = today.getMonth() + currentDateOffset * 3;
-        let year = today.getFullYear();
-        while (totalMonthOffset < 0) { totalMonthOffset += 12; year--; }
-        while (totalMonthOffset >= 12) { totalMonthOffset -= 12; year++; }
-        const quarterStartMonth = Math.floor(totalMonthOffset / 3) * 3;
-        dateStart = new Date(year, quarterStartMonth, 1);
-        dateEnd = new Date(year, quarterStartMonth + 3, 0);
-        label = `${dateStart.getFullYear()}, ${Math.floor(quarterStartMonth / 3) + 1}-й квартал`;
-    } else if (currentPeriodType === 'year') {
-        const year = today.getFullYear() + currentDateOffset;
-        dateStart = new Date(year, 0, 1);
-        dateEnd = new Date(year, 11, 31);
-        label = `${year} год`;
-    }
-
-    document.getElementById('currentPeriodLabel').textContent = label;
-    window.currentDateStart = formatDate(dateStart);
-    window.currentDateEnd = formatDate(dateEnd);
-}
-
-async function loadReport(categoryId = null, isBackNavigation = false) {
-    const reportType = document.getElementById('report_type').value;
-    const groupBy = document.getElementById('group_by').value;
-    const periodType = document.getElementById('period_type').value;
-
-    let dateStart, dateEnd;
-    if (periodType === 'custom') {
-        dateStart = document.getElementById('date_start').value;
-        dateEnd = document.getElementById('date_end').value;
-        if (!dateStart || !dateEnd) {
-            showFlash('Выберите период', 'warning');
-            return;
-        }
-    } else {
-        dateStart = window.currentDateStart;
-        dateEnd = window.currentDateEnd;
-    }
-
-    let url = `/api/report-data?report_type=${reportType}&date_start=${dateStart}&date_end=${dateEnd}&group_by=${groupBy}`;
-    if (categoryId !== undefined && groupBy === 'category') {
-        url += `&category_id=${categoryId || ''}`;
-    }
-
-    try {
-        const response = await fetch(url);
-        const data = await response.json();
-
-        // Отладка
-        console.log('Report data:', data);
-        console.log('Report type:', reportType);
-        console.log('Group by:', groupBy);
-
-        if (data.error) {
-            showFlash(data.error, 'danger');
-            return;
-        }
-
-        currentReportData = data;
-        updateSummary(data);
-
-        const titles = {
-            'expenses': 'Расходы по категориям',
-            'income': 'Доходы по категориям'
-        };
-        document.getElementById('chartTitle').textContent = titles[reportType] || 'Распределение';
-
-        if (groupBy === 'user') {
-            renderUserDonutChart(data);
-            updateTable(data, groupBy);
-        } else {
-            if (!isBackNavigation && categoryId !== null && categoryId !== currentCategoryId) {
-                if (currentCategoryId !== null) categoryStack.push(currentCategoryId);
-            } else if (categoryId === null) {
-                categoryStack = [];
-            }
-            currentCategoryId = data.current_category_id;
-
-            console.log('Rendering category chart with items:', data.items);
-            console.log('Total:', data.total);
-
-            renderCategoryDonutChart(data);
-            updateTable(data, groupBy);
-
-            const backButton = document.getElementById('backButton');
-            const pathSpan = document.getElementById('currentCategoryPath');
-            if (data.current_category_name) {
-                pathSpan.textContent = data.current_category_name;
-                backButton.style.display = 'inline-flex';
-            } else {
-                pathSpan.textContent = 'Все категории';
-                backButton.style.display = 'none';
-            }
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showFlash('Ошибка загрузки отчёта', 'danger');
-    }
-}
-
-function goBack() {
-    if (categoryStack.length > 0) {
-        const parentId = categoryStack.pop();
-        loadReport(parentId, true);
-    } else {
-        loadReport(null, true);
-    }
-}
-
-function renderCategoryDonutChart(data) {
-    const circumference = 1130.97;
-    const segmentsGroup = document.getElementById('donutSegments');
-    const totalText = document.getElementById('donutTotal');
-    const legendDiv = document.getElementById('chartLegend');
-
-    let items = data.items || [];
-    let total = data.total || 0;
-
-    segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
-    legendDiv.innerHTML = '';
-
-    if (!items.length || total === 0) {
-        totalText.textContent = '0 ₽';
-        legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
-        return;
-    }
-
-    totalText.textContent = Math.round(total) + ' ₽';
-
-    // Удаляем старые стили
-    const oldStyle = document.getElementById('report-donut-styles');
-    if (oldStyle) oldStyle.remove();
-
-    const style = document.createElement('style');
-    style.id = 'report-donut-styles';
-
-    let cumulativeOffset = 0;
-
-    items.forEach((item, index) => {
-        const percent = (item.value / total) * 100;
-        const length = (percent / 100) * circumference;
-        const segmentClass = `report-segment-${Date.now()}-${index}`;
-        const color = item.color || '#6c757d';
-
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', '250');
-        circle.setAttribute('cy', '250');
-        circle.setAttribute('r', '180');
-        circle.setAttribute('fill', 'none');
-        circle.setAttribute('stroke', color);
-        circle.setAttribute('stroke-width', '40');
-        circle.setAttribute('data-name', item.name);
-        circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
-        circle.setAttribute('data-id', item.id || '');
-        circle.setAttribute('data-has-children', item.has_children);
-
-        circle.classList.add('donut-segment', segmentClass);
-        circle.style.strokeDasharray = `${length} ${circumference}`;
-        circle.style.strokeDashoffset = -cumulativeOffset;
-        circle.style.transition = 'stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease, stroke-width 0.3s ease, filter 0.3s ease';
-
-        // Клик только если есть дети и это НЕ "Без подкатегории"
-        if (item.has_children && item.id !== null) {
-            circle.style.cursor = 'pointer';
-            circle.addEventListener('click', () => loadReport(item.id, false));
-        } else if (item.id === null) {
-            circle.style.cursor = 'default';
-        }
-
-        segmentsGroup.appendChild(circle);
-
-        // CSS для подсветки
-        style.textContent += `
-            .${segmentClass}:hover {
-                stroke-width: 48px !important;
-                filter: drop-shadow(0 0 25px ${color}) !important;
-                cursor: ${item.has_children && item.id !== null ? 'pointer' : 'default'};
-            }
-        `;
-
-        const legendItem = document.createElement('div');
-        legendItem.className = 'legend-item';
-        legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
-
-        if (item.has_children && item.id !== null) {
-            legendItem.style.cursor = 'pointer';
-            legendItem.addEventListener('click', () => loadReport(item.id, false));
-        } else if (item.id === null) {
-            legendItem.style.cursor = 'default';
-        }
-
-        legendDiv.appendChild(legendItem);
-        cumulativeOffset += length;
-    });
-
-    document.head.appendChild(style);
-
-    // Тултипы
-    const tooltip = document.getElementById('donut-tooltip');
-    document.querySelectorAll('#donutSegments .donut-segment').forEach(seg => {
-        seg.addEventListener('mouseenter', (e) => {
-            tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
-            tooltip.classList.add('visible');
-        });
-        seg.addEventListener('mousemove', (e) => {
-            let x = e.clientX + 16, y = e.clientY - 16;
-            if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
-            if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
-            tooltip.style.left = `${x}px`;
-            tooltip.style.top = `${y}px`;
-        });
-        seg.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
-    });
-}
-
-function renderUserDonutChart(data) {
-    const circumference = 1130.97;
-    const segmentsGroup = document.getElementById('userDonutSegments');
-    const totalText = document.getElementById('userDonutTotal');
-    const legendDiv = document.getElementById('userChartLegend');
-
-    // Обновляем заголовок диаграммы пользователей
-    const reportType = document.getElementById('report_type').value;
-    const titleText = reportType === 'expenses' ? 'Расходы по пользователям' : 'Доходы по пользователям';
-    document.querySelector('#userChartContainer .card-title').textContent = titleText;
-
-    let items = data.items || [];
-    let total = data.total || 0;
-
-    segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
-    legendDiv.innerHTML = '';
-
-    if (!items.length || total === 0) {
-        totalText.textContent = '0 ₽';
-        legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
-        return;
-    }
-
-    totalText.textContent = Math.round(total) + ' ₽';
-
-    let cumulativeOffset = 0;
-    const userColors = [
-        '#ff7a00', '#10b981', '#3b82f6', '#8b5cf6',
-        '#f59e0b', '#ef4444', '#22c55e', '#06b6d4',
-        '#ec4899', '#84cc16', '#f97316', '#6366f1'
-    ];
-
-    // Очищаем старые стили
-    const oldStyle = document.getElementById('userDonutStyles');
-    if (oldStyle) oldStyle.remove();
-
-    const style = document.createElement('style');
-    style.id = 'userDonutStyles';
-    style.textContent = `
-        .donut-segment {
-            transition: stroke-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
-            cursor: pointer;
-        }
-    `;
-    for (let idx = 0; idx < items.length; idx++) {
-        const color = userColors[idx % userColors.length];
-        style.textContent += `
-            .donut-segment.seg-user-${idx}:hover {
-                stroke-width: 48px;
-                filter: drop-shadow(0 0 25px ${color});
-            }
-        `;
-    }
-    document.head.appendChild(style);
-
-    items.forEach((item, idx) => {
-        const percent = (item.value / total) * 100;
-        const length = (percent / 100) * circumference;
-        const color = userColors[idx % userColors.length];
-
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', '250');
-        circle.setAttribute('cy', '250');
-        circle.setAttribute('r', '180');
-        circle.setAttribute('fill', 'none');
-        circle.setAttribute('stroke', color);
-        circle.setAttribute('stroke-width', '40');
-        circle.setAttribute('data-name', item.name);
-        circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
-        circle.setAttribute('data-id', item.id);
-        circle.classList.add('donut-segment', `seg-user-${idx}`);
-
-        circle.style.strokeDasharray = `${length} ${circumference}`;
-        circle.style.strokeDashoffset = -cumulativeOffset;
-
-        segmentsGroup.appendChild(circle);
-
-        const legendItem = document.createElement('div');
-        legendItem.className = 'legend-item';
-        legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
-        legendDiv.appendChild(legendItem);
-
-        cumulativeOffset += length;
-    });
-
-    const tooltip = document.getElementById('donut-tooltip');
-    document.querySelectorAll('#userDonutSegments .donut-segment').forEach(seg => {
-        seg.addEventListener('mouseenter', (e) => {
-            tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
-            tooltip.classList.add('visible');
-        });
-        seg.addEventListener('mousemove', (e) => {
-            let x = e.clientX + 16, y = e.clientY - 16;
-            if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
-            if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
-            tooltip.style.left = `${x}px`;
-            tooltip.style.top = `${y}px`;
-        });
-        seg.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
-    });
-}
-
-function updateTable(data, groupBy) {
-    const tbody = document.getElementById('reportTableBody');
-    tbody.innerHTML = '';
-
-    let items = [];
-    let total = 0;
-
-    if (groupBy === 'category') {
-        items = data.items || [];
-        total = data.total || 0;
-    } else if (groupBy === 'user') {
-        items = data.items || [];
-        total = data.total || 0;
-    }
-
-    console.log('UpdateTable - items:', items, 'total:', total);
-
-    if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-secondary">Нет данных</td>' + '</tr>';
-        return;
-    }
-
-    for (const item of items) {
-        const row = tbody.insertRow();
-        const value = item.value !== undefined ? item.value : item.total;
-        const percent = total > 0 ? (value / total) * 100 : 0;
-        row.insertCell(0).textContent = item.name;
-        row.insertCell(1).innerHTML = formatMoney(value);
-        row.insertCell(2).innerHTML = `${percent.toFixed(1)}%`;
-    }
-
-    const totalRow = tbody.insertRow();
-    totalRow.style.borderTop = '2px solid var(--border-primary)';
-    totalRow.style.fontWeight = '600';
-    totalRow.insertCell(0).textContent = 'ИТОГО';
-    totalRow.insertCell(1).innerHTML = formatMoney(total);
-    totalRow.insertCell(2).innerHTML = '100%';
-}
-
-function updateSummary(data) {
-    console.log('Summary - Income:', data.total_income, 'Expense:', data.total_expense);
-    document.getElementById('summaryIncome').textContent = formatMoney(data.total_income);
-    document.getElementById('summaryExpense').textContent = formatMoney(data.total_expense);
-    const balance = data.total_income - data.total_expense;
-    document.getElementById('summaryBalance').textContent = formatMoney(balance);
-    document.getElementById('summaryBalance').style.color = balance >= 0 ? 'var(--success)' : 'var(--error)';
-}
-
-function formatMoney(value) {
-    return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + ' ₽';
-}
-
-function exportReport() {
-    if (!currentReportData) {
-        showFlash('Сначала сформируйте отчёт', 'warning');
-        return;
-    }
-
-    const reportType = document.getElementById('report_type').value;
-    const groupBy = document.getElementById('group_by').value;
-    const periodType = document.getElementById('period_type').value;
-
-    let dateStart, dateEnd;
-    if (periodType === 'custom') {
-        dateStart = document.getElementById('date_start').value;
-        dateEnd = document.getElementById('date_end').value;
-    } else {
-        dateStart = window.currentDateStart;
-        dateEnd = window.currentDateEnd;
-    }
-
-    const url = `/export-report?report_type=${reportType}&group_by=${groupBy}&date_start=${dateStart}&date_end=${dateEnd}`;
-    window.location.href = url;
-}
-
-function init() {
-    const today = new Date();
-    document.getElementById('date_start').value = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
-    document.getElementById('date_end').value = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
-    updatePeriodLabel();
-    loadReport();
-}
-
-init();
+    init();
 
     document.getElementById('report_type').addEventListener('change', () => {
-    // Сбрасываем навигацию по категориям при смене типа отчёта
-    currentCategoryId = null;
-    categoryStack = [];
-    loadReport();
-});
+        currentCategoryId = null;
+        categoryStack = [];
+        loadReport();
+    });
 </script>
 {% endblock %}

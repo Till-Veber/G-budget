@@ -7,29 +7,22 @@
     <!-- Информация о семье -->
     <div class="card">
         <h3 class="card-title">Информация о семье</h3>
-        <div class="stat-value" style="font-size: 1.8rem;" id="familyName">{{ family.name }}</div>
-        <div class="text-secondary">Создана: {{ family.created_at.strftime('%d.%m.%Y') }}</div>
+        <div class="stat-value" style="font-size: 1.8rem;" id="familyName"></div>
+        <div class="text-secondary" id="familyCreatedAt"></div>
 
         <div class="mt-3" style="display: flex; gap: 12px; flex-wrap: wrap;">
-            {% if current_user.role in ['Создатель', 'Администратор'] %}
-            <button class="btn btn-primary" onclick="openRenameFamilyModal()">
+            <button class="btn btn-primary" id="renameFamilyBtn" style="display: none;">
                 Переименовать семью
             </button>
-            {% endif %}
-
-            {% if current_user.role == 'Создатель' %}
-            <button class="btn btn-danger" onclick="deleteFamily()">
+            <button class="btn btn-danger" id="deleteFamilyBtn" style="display: none;">
                 Удалить семью
             </button>
-            {% endif %}
         </div>
 
-        {% if current_user.role == 'Создатель' or current_user.role == 'Администратор' %}
-        <div class="mt-3">
+        <div class="mt-3" id="adminActions" style="display: none;">
             <label class="text-secondary" style="display: block; margin-bottom: 8px;">Создать новый код приглашения</label>
-            <button class="btn btn-primary" onclick="generateInvite()">Сгенерировать код</button>
+            <button class="btn btn-primary" id="generateInviteBtn">Сгенерировать код</button>
         </div>
-        {% endif %}
     </div>
 
     <!-- Участники -->
@@ -37,7 +30,7 @@
         <h3 class="card-title">Участники семьи</h3>
         <div class="table-container">
             <div class="table-wrapper">
-                <table>
+                <table id="membersTable">
                     <thead>
                         <tr>
                             <th>ФИО</th>
@@ -46,45 +39,8 @@
                             <th></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for member in members %}
-                        <tr>
-                            <td>{{ member.surname }} {{ member.name }} {{ member.patronymic or '' }}</td>
-                            <td>
-                                {% if member.id == current_user.id %}
-                                    <span class="badge {% if member.role == 'Создатель' %}badge-accent{% elif member.role == 'Администратор' %}badge-warning{% else %}badge-success{% endif %}">
-                                        {{ member.role }}
-                                    </span>
-                                {% else %}
-                                    {% if current_user.role == 'Создатель' %}
-                                    <select onchange="changeRole({{ member.id }}, this.value)" class="role-select" style="background: var(--bg-secondary); padding: 4px 8px; border-radius: var(--radius-sm);">
-                                        <option value="Участник" {% if member.role=='Участник' %}selected{% endif %}>Участник</option>
-                                        <option value="Администратор" {% if member.role=='Администратор' %}selected{% endif %}>Администратор</option>
-                                    </select>
-                                    {% else %}
-                                    <span class="badge {% if member.role == 'Создатель' %}badge-accent{% elif member.role == 'Администратор' %}badge-warning{% else %}badge-success{% endif %}">
-                                        {{ member.role }}
-                                    </span>
-                                    {% endif %}
-                                {% endif %}
-                            </td>
-                            <td>{{ member.reg_date.strftime('%d.%m.%Y') }}</td>
-                            <td>
-                                {% if member.id != current_user.id %}
-                                    {% if current_user.role == 'Создатель' %}
-                                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem; margin-right: 8px;" onclick="removeMember({{ member.id }})">Исключить</button>
-                                        {% if member.role != 'Создатель' %}
-                                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="transferOwnership({{ member.id }})">Назначить создателем</button>
-                                        {% endif %}
-                                    {% elif current_user.role == 'Администратор' and member.role == 'Участник' %}
-                                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="removeMember({{ member.id }})">Исключить</button>
-                                    {% endif %}
-                                {% else %}
-                                    <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="leaveFamily()">Покинуть</button>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="membersTableBody">
+                        <tr><td> colspan="4" class="text-center text-secondary">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -98,7 +54,7 @@
         <h3 class="card-title">Активные приглашения</h3>
         <div class="table-container">
             <div class="table-wrapper">
-                <table>
+                <table id="activeInvitesTable">
                     <thead>
                         <tr>
                             <th>Код приглашения</th>
@@ -106,29 +62,8 @@
                             <th></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for invite in active_invites %}
-                        <tr>
-                            <td><code style="background: var(--bg-secondary); padding: 4px 8px; border-radius: 8px; font-family: monospace;">{{ invite.code }}</code></td>
-                            <td>{{ invite.expires_at.strftime('%d.%m.%Y %H:%M') if invite.expires_at else '—' }}</td>
-                            <td>
-                                <button class="copy-btn" onclick="copyToClipboard('{{ invite.code }}', this)" title="Скопировать код">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                </button>
-                                <button class="delete-invite-btn" onclick="deleteInvite({{ invite.id }})" title="Отозвать приглашение">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M18 6L6 18"></path>
-                                        <path d="M6 6l12 12"></path>
-                                    </svg>
-                                </button>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="3" class="text-center text-secondary">Нет активных приглашений</td></tr>
-                        {% endfor %}
+                    <tbody id="activeInvitesBody">
+                        <tr><td> colspan="3" class="text-center text-secondary">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -142,7 +77,7 @@
         <h3 class="card-title">История приглашений</h3>
         <div class="table-container">
             <div class="table-wrapper">
-                <table>
+                <table id="oldInvitesTable">
                     <thead>
                         <tr>
                             <th>Код приглашения</th>
@@ -150,20 +85,8 @@
                             <th>Дата истечения</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for invite in old_invitations %}
-                        <tr>
-                            <td><code>{{ invite.code }}</code></td>
-                            <td>
-                                <span class="badge badge-{{ 'warning' if invite.status == 'Ожидает' else 'success' if invite.status == 'Принят' else 'error' }}">
-                                    {{ invite.status }}
-                                </span>
-                            </td>
-                            <td>{{ invite.expires_at.strftime('%d.%m.%Y %H:%M') if invite.expires_at else '—' }}</td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="3" class="text-center text-secondary">Нет истории приглашений</td></tr>
-                        {% endfor %}
+                    <tbody id="oldInvitesBody">
+                        <tr><td> colspan="3" class="text-center text-secondary">Загрузка...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -182,13 +105,14 @@
             <form id="renameFamilyForm">
                 <div class="form-group">
                     <label for="rename_family_name">Новое название семьи</label>
-                    <input type="text" id="rename_family_name" value="{{ family.name }}" required maxlength="100">
+                    <input type="text" id="rename_family_name" required maxlength="100">
                 </div>
+                <div id="renameFamilyError" class="alert alert-danger" style="display: none; margin-top: 16px;"></div>
             </form>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeRenameFamilyModal()">Отмена</button>
-            <button class="btn btn-primary" onclick="confirmRenameFamily()">Сохранить</button>
+            <button class="btn btn-primary" id="confirmRenameFamilyBtn">Сохранить</button>
         </div>
     </div>
 </div>
@@ -204,27 +128,13 @@
             <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--error); padding: 12px; margin-bottom: 20px; border-radius: var(--radius-sm);">
                 <strong style="color: var(--error);">ВНИМАНИЕ!</strong>
                 <p style="margin-top: 8px; font-size: 0.9rem; color: var(--text-secondary);">
-                    Это действие невозможно отменить. Все данные семьи будут безвозвратно удалены:
-                </p>
-                <ul style="margin-top: 8px; margin-left: 20px; font-size: 0.85rem; color: var(--text-secondary);">
-                    <li>Все транзакции всех участников</li>
-                    <li>Все категории и лимиты</li>
-                    <li>Все приглашения</li>
-                </ul>
-                <p style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
-                    Все участники будут откреплены от семьи.
+                    Это действие невозможно отменить. Все данные семьи будут безвозвратно удалены.
                 </p>
             </div>
-
             <div class="form-group">
                 <label style="color: var(--error);">Для подтверждения введите название семьи:</label>
-                <input type="text" id="deleteFamilyConfirmInput"
-                       placeholder="Введите «{{ family.name }}»"
-                       autocomplete="off"
-                       style="border-color: var(--error);">
-                <p class="text-muted" style="font-size: 0.75rem; margin-top: 6px;">
-                    Введите: <strong style="color: var(--accent-primary);">{{ family.name }}</strong>
-                </p>
+                <input type="text" id="deleteFamilyConfirmInput" autocomplete="off">
+                <div id="deleteFamilyError" class="alert alert-danger" style="display: none; margin-top: 16px;"></div>
             </div>
         </div>
         <div class="modal-footer">
@@ -234,135 +144,172 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block extra_js %}
 <script>
-    function changeRole(userId, newRole) {
-        fetch('{{ url_for("main.change_member_role") }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId, role: newRole })
-        })
-        .then(response => response.json())
-        .then(data => {
+    let currentFamilyName = '';
+    let currentUserRole = '';
+    let currentUserId = null;
+
+    // Загрузка данных семьи
+    async function loadFamilyData() {
+        try {
+            const response = await fetch('/api/family-data');
+            const data = await response.json();
+
             if (data.success) {
-                showFlash('Роль изменена', 'success');
-                setTimeout(() => location.reload(), 1000);
+                currentFamilyName = data.family.name;
+                currentUserRole = data.current_user_role;
+                currentUserId = data.current_user_id;
+
+                // Обновляем информацию о семье
+                document.getElementById('familyName').textContent = data.family.name;
+                document.getElementById('familyCreatedAt').textContent = `Создана: ${data.family.created_at}`;
+
+                // Показываем/скрываем кнопки в зависимости от роли
+                const renameBtn = document.getElementById('renameFamilyBtn');
+                const deleteBtn = document.getElementById('deleteFamilyBtn');
+                const adminActions = document.getElementById('adminActions');
+
+                if (data.current_user_role === 'Создатель') {
+                    if (renameBtn) renameBtn.style.display = 'inline-flex';
+                    if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+                    if (adminActions) adminActions.style.display = 'block';
+                } else if (data.current_user_role === 'Администратор') {
+                    if (renameBtn) renameBtn.style.display = 'inline-flex';
+                    if (deleteBtn) deleteBtn.style.display = 'none';
+                    if (adminActions) adminActions.style.display = 'block';
+                } else {
+                    if (renameBtn) renameBtn.style.display = 'none';
+                    if (deleteBtn) deleteBtn.style.display = 'none';
+                    if (adminActions) adminActions.style.display = 'none';
+                }
+
+                // Обновляем таблицу участников
+                renderMembers(data.members);
+
+                // Обновляем активные приглашения
+                renderActiveInvites(data.active_invites);
+
+                // Обновляем историю приглашений
+                renderOldInvites(data.old_invitations);
             } else {
-                showFlash('Ошибка: ' + data.error, 'danger');
+                showFlash('Ошибка загрузки данных', 'danger');
             }
-        });
+        } catch (err) {
+            console.error('Error loading family data:', err);
+            showFlash('Ошибка соединения', 'danger');
+        }
     }
 
-    function transferOwnership(userId) {
-        showConfirm(
-            'Передать права создателя этому участнику? Вы станете администратором.',
-            'Передача прав',
-            function() {
-                fetch('{{ url_for("main.transfer_ownership") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ new_creator_id: userId })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showFlash('Права создателя переданы', 'success');
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        showFlash('Ошибка: ' + data.error, 'danger');
-                    }
-                });
-            }
-        );
-    }
+    function renderMembers(members) {
+        const tbody = document.getElementById('membersTableBody');
 
-    function leaveFamily() {
-        showConfirm(
-            'Вы уверены, что хотите покинуть семью?',
-            'Выход из семьи',
-            function() {
-                fetch('{{ url_for("main.leave_family") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        if (data.family_deleted) {
-                            showFlash('Семья удалена, так как вы были последним участником', 'success');
-                        } else {
-                            showFlash('Вы покинули семью', 'success');
-                        }
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showFlash('Ошибка: ' + data.error, 'danger');
-                    }
-                });
-            }
-        );
-    }
+        if (!members || members.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary">Нет участников</td</tr>';
+            return;
+        }
 
-    function generateInvite() {
-        fetch('{{ url_for("main.generate_invite") }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.code) {
-                showFlash('Код приглашения создан: ' + data.code, 'success');
-                setTimeout(() => location.reload(), 1500);
+        tbody.innerHTML = members.map(member => {
+            let roleHtml = '';
+            let actionsHtml = '';
+
+            if (member.is_current_user) {
+                // Текущий пользователь
+                const badgeClass = member.role === 'Создатель' ? 'badge-accent' : (member.role === 'Администратор' ? 'badge-warning' : 'badge-success');
+                roleHtml = `<span class="badge ${badgeClass}">${member.role}</span>`;
+                actionsHtml = `<button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="leaveFamily()">Покинуть</button>`;
             } else {
-                showFlash('Ошибка: ' + data.error, 'danger');
+                // Другой участник
+                if (currentUserRole === 'Создатель') {
+                    roleHtml = `
+                        <select onchange="changeRole(${member.id}, this.value)" class="role-select" style="background: var(--bg-secondary); padding: 4px 8px; border-radius: var(--radius-sm);">
+                            <option value="Участник" ${member.role === 'Участник' ? 'selected' : ''}>Участник</option>
+                            <option value="Администратор" ${member.role === 'Администратор' ? 'selected' : ''}>Администратор</option>
+                        </select>
+                    `;
+                    actionsHtml = `
+                        <button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem; margin-right: 8px;" onclick="removeMember(${member.id})">Исключить</button>
+                        ${member.role !== 'Создатель' ? `<button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="transferOwnership(${member.id})">Назначить создателем</button>` : ''}
+                    `;
+                } else if (currentUserRole === 'Администратор' && member.role === 'Участник') {
+                    const badgeClass = member.role === 'Создатель' ? 'badge-accent' : (member.role === 'Администратор' ? 'badge-warning' : 'badge-success');
+                    roleHtml = `<span class="badge ${badgeClass}">${member.role}</span>`;
+                    actionsHtml = `<button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="removeMember(${member.id})">Исключить</button>`;
+                } else {
+                    const badgeClass = member.role === 'Создатель' ? 'badge-accent' : (member.role === 'Администратор' ? 'badge-warning' : 'badge-success');
+                    roleHtml = `<span class="badge ${badgeClass}">${member.role}</span>`;
+                    actionsHtml = '';
+                }
             }
-        });
+
+            return `
+                <tr>
+                    <td>${escapeHtml(member.full_name)}</td>
+                    <td>${roleHtml}</td>
+                    <td>${member.reg_date}</td>
+                    <td>${actionsHtml}</td>
+                </tr>
+            `;
+        }).join('');
     }
 
-    function deleteInvite(inviteId) {
-        showConfirm(
-            'Отозвать приглашение? Код станет недействительным.',
-            'Отзыв приглашения',
-            function() {
-                fetch(`/invite/${inviteId}`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showFlash('Приглашение отозвано', 'success');
-                        location.reload();
-                    } else {
-                        showFlash('Ошибка: ' + data.error, 'danger');
-                    }
-                });
-            }
-        );
+    function renderActiveInvites(invites) {
+        const tbody = document.getElementById('activeInvitesBody');
+
+        if (!invites || invites.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-secondary">Нет активных приглашений</td</tr>';
+            return;
+        }
+
+        tbody.innerHTML = invites.map(invite => `
+            <tr>
+                <td><code style="background: var(--bg-secondary); padding: 4px 8px; border-radius: 8px; font-family: monospace;">${escapeHtml(invite.code)}</code></td>
+                <td>${escapeHtml(invite.expires_at)}</td>
+                <td>
+                    <button class="copy-btn" onclick="copyToClipboard('${invite.code}', this)" title="Скопировать код">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                    <button class="delete-invite-btn" onclick="deleteInvite(${invite.id})" title="Отозвать приглашение">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18"></path>
+                            <path d="M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                 </td>
+            </tr>
+        `).join('');
     }
 
-    function removeMember(userId) {
-        showConfirm(
-            'Вы уверены, что хотите исключить участника из семьи?',
-            'Исключение участника',
-            function() {
-                fetch('{{ url_for("main.remove_member") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showFlash('Участник исключён из семьи', 'success');
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        showFlash('Ошибка: ' + data.error, 'danger');
-                    }
-                });
-            }
-        );
+    function renderOldInvites(invites) {
+        const tbody = document.getElementById('oldInvitesBody');
+
+        if (!invites || invites.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-secondary">Нет истории приглашений</td</tr>';
+            return;
+        }
+
+        tbody.innerHTML = invites.map(invite => {
+            let badgeClass = '';
+            if (invite.status === 'Ожидает') badgeClass = 'warning';
+            else if (invite.status === 'Принят') badgeClass = 'success';
+            else badgeClass = 'error';
+
+            return `
+                <tr>
+                    <td><code>${escapeHtml(invite.code)}</code></td>
+                    <td><span class="badge badge-${badgeClass}">${invite.status}</span></td>
+                    <td>${escapeHtml(invite.expires_at)}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function copyToClipboard(text, btnElement) {
@@ -377,8 +324,10 @@
         });
     }
 
+    // Переименование семьи
     function openRenameFamilyModal() {
-        document.getElementById('rename_family_name').value = document.getElementById('familyName').textContent;
+        document.getElementById('rename_family_name').value = currentFamilyName;
+        document.getElementById('renameFamilyError').style.display = 'none';
         document.getElementById('renameFamilyModal').classList.add('active');
         document.body.style.overflow = 'hidden';
     }
@@ -389,60 +338,235 @@
     }
 
     function closeRenameFamilyModalOnOverlay(event) {
-        if (event.target === event.currentTarget) {
-            closeRenameFamilyModal();
-        }
+        if (event.target === event.currentTarget) closeRenameFamilyModal();
     }
 
-    function confirmRenameFamily() {
+    async function confirmRenameFamily() {
         const newName = document.getElementById('rename_family_name').value.trim();
+        const errorDiv = document.getElementById('renameFamilyError');
+        const saveBtn = document.getElementById('confirmRenameFamilyBtn');
+
         if (!newName) {
-            showFlash('Название семьи не может быть пустым', 'warning');
+            errorDiv.textContent = 'Название семьи не может быть пустым';
+            errorDiv.style.display = 'block';
             return;
         }
 
         if (newName.length > 100) {
-            showFlash('Название не должно превышать 100 символов', 'warning');
+            errorDiv.textContent = 'Название не должно превышать 100 символов';
+            errorDiv.style.display = 'block';
             return;
         }
 
-        fetch('{{ url_for("main.rename_family") }}', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newName })
-        })
-        .then(response => response.json())
-        .then(data => {
+        errorDiv.style.display = 'none';
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Сохранение...';
+
+        try {
+            const response = await fetch('/family/rename', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+
+            const data = await response.json();
+
             if (data.success) {
                 showFlash('Семья переименована', 'success');
+                currentFamilyName = newName;
                 document.getElementById('familyName').textContent = newName;
                 closeRenameFamilyModal();
-                setTimeout(() => location.reload(), 1000);
+            } else {
+                errorDiv.textContent = data.error || 'Ошибка при переименовании';
+                errorDiv.style.display = 'block';
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Ошибка соединения с сервером';
+            errorDiv.style.display = 'block';
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Сохранить';
+        }
+    }
+
+    // Генерация кода приглашения
+    async function generateInvite() {
+        const btn = document.getElementById('generateInviteBtn');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Генерация...';
+
+        try {
+            const response = await fetch('/generate-invite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+
+            if (data.code) {
+                showFlash('Код приглашения создан: ' + data.code, 'success');
+                await loadFamilyData(); // Обновляем список приглашений
+            } else {
+                showFlash('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'danger');
+            }
+        } catch (err) {
+            showFlash('Ошибка соединения с сервером', 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    // Отзыв приглашения
+    async function deleteInvite(inviteId) {
+        showConfirm(
+            'Отозвать приглашение? Код станет недействительным.',
+            'Отзыв приглашения',
+            async function() {
+                try {
+                    const response = await fetch(`/invite/${inviteId}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showFlash('Приглашение отозвано', 'success');
+                        await loadFamilyData(); // Обновляем список приглашений
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                    }
+                } catch (err) {
+                    showFlash('Ошибка соединения с сервером', 'danger');
+                }
+            }
+        );
+    }
+
+    // Изменение роли участника
+    async function changeRole(userId, newRole) {
+        try {
+            const response = await fetch('/family/change-role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, role: newRole })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showFlash('Роль изменена', 'success');
+                await loadFamilyData(); // Обновляем таблицу участников
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');
             }
-        })
-        .catch(error => {
-            showFlash('Ошибка сервера', 'danger');
-        });
+        } catch (err) {
+            showFlash('Ошибка соединения с сервером', 'danger');
+        }
     }
 
+    // Передача прав создателя
+    async function transferOwnership(userId) {
+        showConfirm(
+            'Передать права создателя этому участнику? Вы станете администратором.',
+            'Передача прав',
+            async function() {
+                try {
+                    const response = await fetch('/family/transfer-ownership', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_creator_id: userId })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showFlash('Права создателя переданы', 'success');
+                        await loadFamilyData(); // Обновляем все данные
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                    }
+                } catch (err) {
+                    showFlash('Ошибка соединения с сервером', 'danger');
+                }
+            }
+        );
+    }
+
+    // Исключение участника
+    async function removeMember(userId) {
+        showConfirm(
+            'Вы уверены, что хотите исключить участника из семьи?',
+            'Исключение участника',
+            async function() {
+                try {
+                    const response = await fetch('/family/remove-member', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: userId })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showFlash('Участник исключён из семьи', 'success');
+                        await loadFamilyData(); // Обновляем таблицу участников
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                    }
+                } catch (err) {
+                    showFlash('Ошибка соединения с сервером', 'danger');
+                }
+            }
+        );
+    }
+
+    // Выход из семьи
+    async function leaveFamily() {
+        showConfirm(
+            'Вы уверены, что хотите покинуть семью?',
+            'Выход из семьи',
+            async function() {
+                try {
+                    const response = await fetch('/family/leave', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        if (data.family_deleted) {
+                            showFlash('Семья удалена, так как вы были последним участником', 'success');
+                        } else {
+                            showFlash('Вы покинули семью', 'success');
+                        }
+                        setTimeout(() => {
+                            window.location.href = '/no-family';
+                        }, 1500);
+                    } else {
+                        showFlash('Ошибка: ' + data.error, 'danger');
+                    }
+                } catch (err) {
+                    showFlash('Ошибка соединения с сервером', 'danger');
+                }
+            }
+        );
+    }
+
+    // Удаление семьи
     function deleteFamily() {
-        const familyName = document.getElementById('familyName').textContent;
         const confirmInput = document.getElementById('deleteFamilyConfirmInput');
-        const modal = document.getElementById('deleteFamilyModal');
+        const errorDiv = document.getElementById('deleteFamilyError');
 
         if (confirmInput) {
             confirmInput.value = '';
-            confirmInput.placeholder = `Введите «${familyName}»`;
+            errorDiv.style.display = 'none';
         }
 
-        const hintParagraph = modal.querySelector('.text-muted strong');
-        if (hintParagraph) {
-            hintParagraph.textContent = familyName;
-        }
-
-        modal.classList.add('active');
+        document.getElementById('deleteFamilyModal').classList.add('active');
         document.body.style.overflow = 'hidden';
 
         setTimeout(() => {
@@ -456,91 +580,88 @@
     }
 
     function closeDeleteFamilyModalOnOverlay(event) {
-        if (event.target === event.currentTarget) {
-            closeDeleteFamilyModal();
+        if (event.target === event.currentTarget) closeDeleteFamilyModal();
+    }
+
+    async function confirmDeleteFamily() {
+        const confirmInput = document.getElementById('deleteFamilyConfirmInput');
+        const errorDiv = document.getElementById('deleteFamilyError');
+        const inputValue = confirmInput ? confirmInput.value.trim() : '';
+        const deleteBtn = document.getElementById('deleteFamilyConfirmBtn');
+
+        if (inputValue === currentFamilyName) {
+            errorDiv.style.display = 'none';
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = 'Удаление...';
+
+            try {
+                const response = await fetch('/family/delete', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closeDeleteFamilyModal();
+                    showFlash('Семья "' + currentFamilyName + '" удалена', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/no-family';
+                    }, 1500);
+                } else {
+                    errorDiv.textContent = data.error || 'Ошибка при удалении';
+                    errorDiv.style.display = 'block';
+                    deleteBtn.disabled = false;
+                    deleteBtn.textContent = 'Удалить навсегда';
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Ошибка соединения с сервером';
+                errorDiv.style.display = 'block';
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = 'Удалить навсегда';
+            }
+        } else if (inputValue) {
+            errorDiv.textContent = 'Название семьи введено неверно';
+            errorDiv.style.display = 'block';
+            if (confirmInput) {
+                confirmInput.value = '';
+                confirmInput.focus();
+            }
+        } else {
+            errorDiv.textContent = 'Введите название семьи для подтверждения';
+            errorDiv.style.display = 'block';
+            if (confirmInput) confirmInput.focus();
         }
     }
 
+    // Назначение обработчиков событий
     document.addEventListener('DOMContentLoaded', function() {
-        const confirmBtn = document.getElementById('deleteFamilyConfirmBtn');
-        if (confirmBtn) {
-            const newConfirmBtn = confirmBtn.cloneNode(true);
-            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        loadFamilyData();
 
-            newConfirmBtn.addEventListener('click', function() {
-                const familyName = document.getElementById('familyName').textContent;
-                const confirmInput = document.getElementById('deleteFamilyConfirmInput');
-                const inputValue = confirmInput ? confirmInput.value.trim() : '';
+        document.getElementById('renameFamilyBtn').addEventListener('click', openRenameFamilyModal);
+        document.getElementById('confirmRenameFamilyBtn').addEventListener('click', confirmRenameFamily);
+        document.getElementById('generateInviteBtn').addEventListener('click', generateInvite);
+        document.getElementById('deleteFamilyBtn').addEventListener('click', deleteFamily);
+        document.getElementById('deleteFamilyConfirmBtn').addEventListener('click', confirmDeleteFamily);
 
-                if (inputValue === familyName) {
-                    const originalText = newConfirmBtn.textContent;
-                    newConfirmBtn.textContent = 'Удаление...';
-                    newConfirmBtn.disabled = true;
-
-                    fetch('{{ url_for("main.delete_family") }}', {
-                        method: 'DELETE',
-                        headers: { 'Content-Type': 'application/json' }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            closeDeleteFamilyModal();
-                            showFlash('Семья "' + familyName + '" удалена', 'success');
-                            setTimeout(() => {
-                                window.location.href = '{{ url_for("main.no_family") }}';
-                            }, 1500);
-                        } else {
-                            showFlash('Ошибка: ' + data.error, 'danger');
-                            newConfirmBtn.textContent = originalText;
-                            newConfirmBtn.disabled = false;
-                        }
-                    })
-                    .catch(error => {
-                        showFlash('Ошибка сервера: ' + error, 'danger');
-                        newConfirmBtn.textContent = originalText;
-                        newConfirmBtn.disabled = false;
-                    });
-                } else if (inputValue) {
-                    showFlash('Название семьи введено неверно', 'warning');
-                    if (confirmInput) {
-                        confirmInput.value = '';
-                        confirmInput.focus();
-                        confirmInput.style.borderColor = 'var(--error)';
-                        setTimeout(() => {
-                            if (confirmInput) confirmInput.style.borderColor = '';
-                        }, 500);
-                    }
-                } else {
-                    showFlash('Введите название семьи для подтверждения', 'warning');
-                    if (confirmInput) {
-                        confirmInput.focus();
-                        confirmInput.style.borderColor = 'var(--error)';
-                        setTimeout(() => {
-                            if (confirmInput) confirmInput.style.borderColor = '';
-                        }, 500);
-                    }
-                }
-            });
-        }
-    });
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            const modal = document.getElementById('deleteFamilyModal');
-            if (modal && modal.classList.contains('active')) {
-                closeDeleteFamilyModal();
-            }
-        }
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
+        // Enter в поле подтверждения удаления
         const confirmInput = document.getElementById('deleteFamilyConfirmInput');
         if (confirmInput) {
             confirmInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    const confirmBtn = document.getElementById('deleteFamilyConfirmBtn');
-                    if (confirmBtn) confirmBtn.click();
+                    confirmDeleteFamily();
+                }
+            });
+        }
+
+        // Enter в поле переименования
+        const renameInput = document.getElementById('rename_family_name');
+        if (renameInput) {
+            renameInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmRenameFamily();
                 }
             });
         }

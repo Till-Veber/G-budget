@@ -9,20 +9,80 @@
 
     <div class="flex gap-2 justify-center">
         <a href="{{ url_for('main.create_family') }}" class="btn btn-primary">Создать семью</a>
-        <button class="btn btn-secondary" onclick="showInviteForm()">Ввести код приглашения</button>
+        <button class="btn btn-secondary" onclick="toggleInviteForm()">Ввести код приглашения</button>
     </div>
 
-    <div id="inviteForm" style="display: none; margin-top: 24px;">
-        <form method="POST" action="{{ url_for('main.join_family_by_code') }}">
-            <input type="text" name="invite_code" placeholder="Введите код" style="width: 200px;">
+    <div id="inviteFormContainer" style="display: none; margin-top: 24px;">
+        <div id="inviteError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
+
+        <form id="joinFamilyForm">
+            <input type="text" id="invite_code" name="invite_code" placeholder="Введите код" style="width: 200px; margin-right: 8px;" required>
             <button type="submit" class="btn btn-primary">Присоединиться</button>
         </form>
     </div>
 </div>
 
 <script>
-    function showInviteForm() {
-        document.getElementById('inviteForm').style.display = 'block';
+    function toggleInviteForm() {
+        const container = document.getElementById('inviteFormContainer');
+        container.style.display = container.style.display === 'none' ? 'block' : 'none';
+        if (container.style.display === 'block') {
+            document.getElementById('invite_code').focus();
+        }
     }
+
+    document.getElementById('joinFamilyForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const code = document.getElementById('invite_code').value;
+        const errorDiv = document.getElementById('inviteError');
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn.textContent;
+
+        // Скрываем предыдущую ошибку
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+
+        // Блокируем кнопку
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Проверка...';
+
+        const formData = new FormData();
+        formData.append('invite_code', code);
+
+        try {
+            const response = await fetch('{{ url_for("main.join_family_by_code") }}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.href = data.redirect;
+            } else {
+                errorDiv.textContent = data.error;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
+                document.getElementById('invite_code').value = '';
+                document.getElementById('invite_code').focus();
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Ошибка соединения с сервером';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
+    });
+
+    // Очищаем ошибку при вводе
+    document.getElementById('invite_code').addEventListener('input', function() {
+        const errorDiv = document.getElementById('inviteError');
+        if (errorDiv) errorDiv.style.display = 'none';
+    });
 </script>
 {% endblock %}

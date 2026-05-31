@@ -39,8 +39,16 @@ def login():
         if user and user.check_password(request.form['password']):
             login_user(user)
             next_page = request.args.get('next')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': True, 'redirect': next_page or url_for('main.dashboard')})
             return redirect(next_page or url_for('main.dashboard'))
+
+        # Ошибка авторизации
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Неверный логин или пароль'}), 401
         flash('Неверный логин или пароль', 'danger')
+        return render_template('login.html')
+
     return render_template('login.html')
 
 
@@ -50,14 +58,21 @@ def register():
         return redirect(url_for('main.dashboard'))
 
     if request.method == 'POST':
+        # Проверка паролей
         if request.form['password'] != request.form['confirm_password']:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Пароли не совпадают'}), 400
             flash('Пароли не совпадают', 'danger')
             return redirect(url_for('main.register'))
 
+        # Проверка логина
         if User.query.filter_by(login=request.form['login']).first():
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Логин уже занят'}), 400
             flash('Логин уже занят', 'danger')
             return redirect(url_for('main.register'))
 
+        # Создание пользователя
         user = User(
             surname=request.form['surname'],
             name=request.form['name'],
@@ -71,6 +86,10 @@ def register():
         db.session.commit()
 
         login_user(user)
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'redirect': url_for('main.choose_action')})
+
         flash('Регистрация успешна! Теперь создайте семью или примите приглашение', 'success')
         return redirect(url_for('main.choose_action'))
 
@@ -230,6 +249,154 @@ def dashboard():
     )
 
 
+# ==================== API ДЛЯ ДИНАМИЧЕСКОГО ОБНОВЛЕНИЯ DASHBOARD ======================================== API ДЛЯ ДИНАМИЧЕСКОГО ОБНОВЛЕНИЯ DASHBOARD ======================================== API ДЛЯ ДИНАМИЧЕСКОГО ОБНОВЛЕНИЯ DASHBOARD ====================
+
+@main_bp.route('/api/dashboard-stats')
+@login_required
+def api_dashboard_stats():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    now = datetime.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    family_users = User.query.filter_by(family_id=current_user.family_id).all()
+    user_ids = [u.id for u in family_users]
+
+    month_income = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id.in_(user_ids),
+        Transaction.date >= month_start.date(),
+        Transaction.category_id.in_(
+            db.session.query(Category.id).filter(Category.type == 'Доход')
+        )
+    ).scalar() or 0
+    month_income = float(month_income)
+
+    month_expenses = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id.in_(user_ids),
+        Transaction.date >= month_start.date(),
+        Transaction.category_id.in_(
+            db.session.query(Category.id).filter(Category.type == 'Расход')
+        )
+    ).scalar() or 0
+    month_expenses = float(month_expenses)
+
+    balance = month_income - month_expenses
+
+    if month_start.month == 1:
+        prev_month_start = month_start.replace(year=month_start.year - 1, month=12)
+    else:
+        prev_month_start = month_start.replace(month=month_start.month - 1)
+
+    prev_income = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id.in_(user_ids),
+        Transaction.date >= prev_month_start.date(),
+        Transaction.date < month_start.date(),
+        Transaction.category_id.in_(
+            db.session.query(Category.id).filter(Category.type == 'Доход')
+        )
+    ).scalar() or 0
+    prev_income = float(prev_income)
+
+    prev_expenses = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id.in_(user_ids),
+        Transaction.date >= prev_month_start.date(),
+        Transaction.date < month_start.date(),
+        Transaction.category_id.in_(
+            db.session.query(Category.id).filter(Category.type == 'Расход')
+        )
+    ).scalar() or 0
+    prev_expenses = float(prev_expenses)
+
+    prev_balance = prev_income - prev_expenses
+
+    if prev_balance != 0:
+        balance_change = ((balance - prev_balance) / abs(prev_balance)) * 100
+    else:
+        balance_change = 100 if balance > 0 else 0
+
+    expense_percent = int((month_expenses / (month_income or 1)) * 100) if month_income > 0 else 0
+
+    return jsonify({
+        'success': True,
+        'balance': balance,
+        'balance_change': balance_change,
+        'month_expenses': month_expenses,
+        'expense_percent': expense_percent,
+        'members_count': len(family_users)
+    })
+
+
+@main_bp.route('/api/last-transactions')
+@login_required
+def api_last_transactions():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    transactions = Transaction.query.join(User).filter(
+        User.family_id == current_user.family_id
+    ).order_by(Transaction.date.desc(), Transaction.time.desc()).limit(10).all()
+
+    return jsonify({
+        'success': True,
+        'transactions': [{
+            'id': t.id,
+            'date': t.date.strftime('%d.%m.%Y'),
+            'category_name': t.category.name,
+            'category_color': t.category.color,
+            'category_type': t.category.type,
+            'amount': float(t.amount),
+            'author': f"{t.author.surname} {t.author.name}"
+        } for t in transactions]
+    })
+
+
+@main_bp.route('/api/limits-data')
+@login_required
+def api_limits_data():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    now = datetime.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    family_users = User.query.filter_by(family_id=current_user.family_id).all()
+    user_ids = [u.id for u in family_users]
+
+    family_limits = []
+    if current_user.role in ['Создатель', 'Администратор']:
+        family_plans = FamilyPlan.query.filter_by(family_id=current_user.family_id).all()
+        for plan in family_plans:
+            category = Category.query.get(plan.category_id)
+            if not category:
+                continue
+
+            category_ids = get_category_with_children_ids(category)
+            spent = db.session.query(func.sum(Transaction.amount)).filter(
+                Transaction.user_id.in_(user_ids),
+                Transaction.category_id.in_(category_ids),
+                Transaction.date >= month_start.date()
+            ).scalar() or 0
+            spent = float(spent)
+            limit_amount = float(plan.limit_amount)
+            percent = (spent / limit_amount) * 100 if limit_amount > 0 else 0
+            is_exceeded = spent > limit_amount
+
+            family_limits.append({
+                'category_id': plan.category_id,
+                'category_name': category.name,
+                'limit_amount': limit_amount,
+                'spent': spent,
+                'percent': min(percent, 100),
+                'is_exceeded': is_exceeded
+            })
+
+    return jsonify({
+        'success': True,
+        'family_limits': family_limits
+    })
+
+
 # ==================== УПРАВЛЕНИЕ СЕМЬЁЙ ======================================== УПРАВЛЕНИЕ СЕМЬЁЙ ======================================== УПРАВЛЕНИЕ СЕМЬЁЙ ====================
 
 @main_bp.route('/create-family', methods=['GET', 'POST'])
@@ -280,23 +447,31 @@ def create_family():
 @login_required
 def join_family_by_code():
     if current_user.family_id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Вы уже состоите в семье'}), 400
         flash('Вы уже состоите в семье', 'warning')
         return redirect(url_for('main.dashboard'))
 
     code = request.form.get('invite_code')
     if not code:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Введите код приглашения'}), 400
         flash('Введите код приглашения', 'danger')
         return redirect(url_for('main.choose_action'))
 
     invite = Invitation.query.filter_by(code=code, status='Ожидает').first()
 
     if not invite:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Неверный код приглашения'}), 404
         flash('Неверный код приглашения', 'danger')
         return redirect(url_for('main.choose_action'))
 
     if invite.expires_at and invite.expires_at < datetime.utcnow():
         invite.status = 'Истёк'
         db.session.commit()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Срок действия приглашения истёк'}), 400
         flash('Срок действия приглашения истёк', 'danger')
         return redirect(url_for('main.choose_action'))
 
@@ -304,6 +479,9 @@ def join_family_by_code():
     current_user.role = 'Участник'
     invite.status = 'Принят'
     db.session.commit()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'success': True, 'redirect': url_for('main.dashboard')})
 
     flash('Вы успешно присоединились к семье!', 'success')
     return redirect(url_for('main.dashboard'))
@@ -373,6 +551,55 @@ def family_settings():
         active_invites=active_invites,
         old_invitations=old_invitations
     )
+
+
+@main_bp.route('/api/family-data')
+@login_required
+def api_family_data():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    family = Family.query.get(current_user.family_id)
+    members = User.query.filter_by(family_id=current_user.family_id).all()
+
+    active_invites = Invitation.query.filter_by(
+        family_id=current_user.family_id,
+        status='Ожидает'
+    ).order_by(Invitation.expires_at).all()
+
+    old_invitations = Invitation.query.filter(
+        Invitation.family_id == current_user.family_id,
+        Invitation.status != 'Ожидает'
+    ).order_by(Invitation.expires_at.desc()).limit(20).all()
+
+    return jsonify({
+        'success': True,
+        'family': {
+            'id': family.id,
+            'name': family.name,
+            'created_at': family.created_at.strftime('%d.%m.%Y')
+        },
+        'members': [{
+            'id': m.id,
+            'full_name': f"{m.surname} {m.name} {m.patronymic or ''}".strip(),
+            'role': m.role,
+            'reg_date': m.reg_date.strftime('%d.%m.%Y'),
+            'is_current_user': m.id == current_user.id
+        } for m in members],
+        'active_invites': [{
+            'id': inv.id,
+            'code': inv.code,
+            'expires_at': inv.expires_at.strftime('%d.%m.%Y %H:%M') if inv.expires_at else '—'
+        } for inv in active_invites],
+        'old_invitations': [{
+            'id': inv.id,
+            'code': inv.code,
+            'status': inv.status,
+            'expires_at': inv.expires_at.strftime('%d.%m.%Y %H:%M') if inv.expires_at else '—'
+        } for inv in old_invitations],
+        'current_user_role': current_user.role,
+        'current_user_id': current_user.id
+    })
 
 
 @main_bp.route('/family/rename', methods=['PUT'])
@@ -582,6 +809,42 @@ def categories():
     )
 
 
+@main_bp.route('/api/categories-tree')
+@login_required
+def api_categories_tree():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    all_categories = Category.query.filter_by(family_id=current_user.family_id).all()
+
+    def build_tree(cats, parent_id=None):
+        tree = []
+        for cat in cats:
+            if cat.parent_id == parent_id:
+                tree.append({
+                    'id': cat.id,
+                    'name': cat.name,
+                    'type': cat.type,
+                    'color': cat.color,
+                    'parent_id': cat.parent_id,
+                    'is_protected': cat.is_protected,
+                    'children': build_tree(cats, cat.id)
+                })
+        tree.sort(key=lambda x: x['name'].lower())
+        return tree
+
+    category_tree = build_tree(all_categories)
+
+    # Также возвращаем плоский список для выпадающих списков
+    hierarchical_categories = build_category_tree(all_categories)
+
+    return jsonify({
+        'success': True,
+        'tree': category_tree,
+        'flat': hierarchical_categories
+    })
+
+
 @main_bp.route('/category/add', methods=['POST'])
 @login_required
 def add_category():
@@ -742,6 +1005,8 @@ def move_category():
 @login_required
 def add_transaction():
     if not current_user.family_id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
         return redirect(url_for('main.no_family'))
 
     if request.method == 'POST':
@@ -753,15 +1018,21 @@ def add_transaction():
 
         category = Category.query.get(category_id)
         if not category or category.family_id != current_user.family_id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
             flash('Категория не найдена', 'danger')
             return redirect(url_for('main.add_transaction'))
 
         try:
             amount = Decimal(amount)
             if amount <= 0:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'success': False, 'error': 'Сумма должна быть положительной'}), 400
                 flash('Сумма должна быть положительной', 'danger')
                 return redirect(url_for('main.add_transaction'))
         except (ValueError, TypeError):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Неверный формат суммы'}), 400
             flash('Неверный формат суммы', 'danger')
             return redirect(url_for('main.add_transaction'))
 
@@ -781,6 +1052,13 @@ def add_transaction():
         db.session.commit()
 
         warning = calculate_limit_status(current_user, category, amount, date)
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            response_data = {'success': True}
+            if warning:
+                response_data['warning'] = warning
+            return jsonify(response_data)
+
         if warning:
             flash(warning, 'warning')
         else:
@@ -807,6 +1085,41 @@ def transactions():
     categories = Category.query.filter_by(family_id=current_user.family_id).order_by(Category.name).all()
 
     return render_template('transactions.html', transactions=all_transactions, categories=categories)
+
+
+@main_bp.route('/api/transactions')
+@login_required
+def api_transactions():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    all_transactions = Transaction.query.join(User).filter(
+        User.family_id == current_user.family_id
+    ).order_by(Transaction.date.desc(), Transaction.time.desc()).all()
+
+    categories = Category.query.filter_by(family_id=current_user.family_id).all()
+    categories_list = [{'id': c.id, 'name': c.name, 'type': c.type, 'color': c.color} for c in categories]
+
+    transactions_list = []
+    for txn in all_transactions:
+        transactions_list.append({
+            'id': txn.id,
+            'date': txn.date.strftime('%d.%m.%Y'),
+            'time': txn.time.strftime('%H:%M') if txn.time else '—',
+            'author': f"{txn.author.surname} {txn.author.name}",
+            'category_id': txn.category.id,
+            'category_name': txn.category.name,
+            'category_color': txn.category.color,
+            'category_type': txn.category.type,
+            'amount': float(txn.amount),
+            'comment': txn.comment or '—'
+        })
+
+    return jsonify({
+        'success': True,
+        'transactions': transactions_list,
+        'categories': categories_list
+    })
 
 
 @main_bp.route('/transaction/<int:transaction_id>', methods=['DELETE'])
@@ -935,6 +1248,88 @@ def limits():
         family_limits=family_limits,
         expense_categories=expense_categories
     )
+
+
+@main_bp.route('/api/limits-full')
+@login_required
+def api_limits_full():
+    if not current_user.family_id:
+        return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+
+    now = datetime.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    family_users = User.query.filter_by(family_id=current_user.family_id).all()
+    user_ids = [u.id for u in family_users]
+
+    expense_categories = Category.query.filter_by(family_id=current_user.family_id, type='Расход').order_by(Category.name).all()
+    expense_categories_list = [{'id': c.id, 'name': c.name, 'color': c.color} for c in expense_categories]
+
+    # Личные лимиты
+    personal_plans = UserPlan.query.filter_by(user_id=current_user.id).all()
+    personal_limits = []
+
+    for plan in personal_plans:
+        category = Category.query.get(plan.category_id)
+        if not category:
+            continue
+
+        category_ids = get_category_with_children_ids(category)
+        spent = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.user_id == current_user.id,
+            Transaction.category_id.in_(category_ids),
+            Transaction.date >= month_start.date()
+        ).scalar() or 0
+        spent = float(spent)
+        limit_amount = float(plan.limit_amount)
+        percent = (spent / limit_amount) * 100 if limit_amount > 0 else 0
+        is_exceeded = spent > limit_amount
+
+        personal_limits.append({
+            'category_id': plan.category_id,
+            'category_name': category.name,
+            'limit_amount': limit_amount,
+            'spent': spent,
+            'percent': min(percent, 100),
+            'is_exceeded': is_exceeded
+        })
+
+    # Семейные лимиты
+    family_limits = []
+    if current_user.role in ['Создатель', 'Администратор']:
+        family_plans = FamilyPlan.query.filter_by(family_id=current_user.family_id).all()
+        for plan in family_plans:
+            category = Category.query.get(plan.category_id)
+            if not category:
+                continue
+
+            category_ids = get_category_with_children_ids(category)
+            spent = db.session.query(func.sum(Transaction.amount)).filter(
+                Transaction.user_id.in_(user_ids),
+                Transaction.category_id.in_(category_ids),
+                Transaction.date >= month_start.date()
+            ).scalar() or 0
+            spent = float(spent)
+            limit_amount = float(plan.limit_amount)
+            percent = (spent / limit_amount) * 100 if limit_amount > 0 else 0
+            is_exceeded = spent > limit_amount
+
+            family_limits.append({
+                'category_id': plan.category_id,
+                'category_name': category.name,
+                'limit_amount': limit_amount,
+                'spent': spent,
+                'percent': min(percent, 100),
+                'is_exceeded': is_exceeded
+            })
+
+    return jsonify({
+        'success': True,
+        'personal_limits': personal_limits,
+        'family_limits': family_limits,
+        'expense_categories': expense_categories_list,
+        'is_admin': current_user.role in ['Создатель', 'Администратор']
+    })
 
 
 @main_bp.route('/set-limit', methods=['POST'])

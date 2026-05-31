@@ -7,7 +7,7 @@
     <div class="card" style="max-width: 600px; margin: 0 auto;">
         <h2 class="card-title" style="font-size: 1.8rem;">Регистрация</h2>
 
-        <form method="POST">
+        <form id="registerForm">
             <div class="grid-2" style="gap: 16px;">
                 <div class="form-group">
                     <label for="surname">Фамилия</label>
@@ -39,6 +39,8 @@
                 <input type="password" id="confirm_password" name="confirm_password" required>
             </div>
 
+            <div id="registerError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
+
             <button type="submit" class="btn btn-primary w-full">Зарегистрироваться</button>
         </form>
 
@@ -48,18 +50,72 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
-    document.querySelector('form').addEventListener('submit', function(e) {
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
         const password = document.getElementById('password').value;
         const confirm = document.getElementById('confirm_password').value;
+        const errorDiv = document.getElementById('registerError');
+        const submitBtn = this.querySelector('button[type="submit"]');
 
+        // Клиентская проверка паролей (для мгновенной обратной связи)
         if (password !== confirm) {
-            e.preventDefault();
-            alert('Пароли не совпадают');
+            errorDiv.textContent = 'Пароли не совпадают';
+            errorDiv.style.display = 'block';
+            return;
         }
+
+        // Скрываем предыдущую ошибку
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+
+        // Блокируем кнопку
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Регистрация...';
+
+        const formData = new FormData(this);
+
+        try {
+            const response = await fetch('{{ url_for("main.register") }}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Успешная регистрация - перенаправляем
+                window.location.href = data.redirect;
+            } else {
+                // Показываем ошибку от сервера
+                errorDiv.textContent = data.error;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Зарегистрироваться';
+
+                // Прокручиваем к ошибке
+                errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Ошибка соединения с сервером';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Зарегистрироваться';
+        }
+    });
+
+    // Очищаем ошибку при вводе в поля
+    const inputs = document.querySelectorAll('#registerForm input');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            const errorDiv = document.getElementById('registerError');
+            errorDiv.style.display = 'none';
+        });
     });
 </script>
 {% endblock %}

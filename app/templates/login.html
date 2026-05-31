@@ -7,7 +7,7 @@
     <div class="card" style="animation-delay: 0.1s;">
         <h2 class="card-title" style="font-size: 2rem; margin-bottom: 32px;">Добро пожаловать</h2>
 
-        <form method="POST">
+        <form id="loginForm">
             <div class="form-group">
                 <label for="login">Логин</label>
                 <input type="text" id="login" name="login" required placeholder="Введите ваш логин">
@@ -17,6 +17,8 @@
                 <label for="password">Пароль</label>
                 <input type="password" id="password" name="password" required placeholder="Введите пароль">
             </div>
+
+            <div id="loginError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
 
             <button type="submit" class="btn btn-primary w-full">Войти</button>
         </form>
@@ -37,4 +39,50 @@
         </ul>
     </div>
 </div>
+
+<script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const errorDiv = document.getElementById('loginError');
+        const submitBtn = this.querySelector('button[type="submit"]');
+
+        // Скрываем предыдущую ошибку
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+
+        // Блокируем кнопку на время запроса
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Вход...';
+
+        try {
+            const response = await fetch('{{ url_for("main.login") }}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Перенаправление после успешного входа
+                window.location.href = data.redirect;
+            } else {
+                // Показываем ошибку
+                errorDiv.textContent = data.error;
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Войти';
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Ошибка соединения с сервером';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Войти';
+        }
+    });
+</script>
 {% endblock %}

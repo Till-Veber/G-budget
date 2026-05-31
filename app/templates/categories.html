@@ -24,12 +24,6 @@
                 <label for="cat_parent">Родительская категория</label>
                 <select id="cat_parent">
                     <option value="">— Корневая категория —</option>
-                    {% for cat in hierarchical_categories %}
-                    <option value="{{ cat.id }}" style="color: {{ cat.color }};">
-                        {% for i in range(cat.level) %}&nbsp;&nbsp;&nbsp;&nbsp;{% endfor %}
-                        {% if cat.level > 0 %}↳ {% endif %}{{ cat.name }} ({{ cat.type }})
-                    </option>
-                    {% endfor %}
                 </select>
             </div>
 
@@ -45,6 +39,8 @@
                     </button>
                 </div>
             </div>
+
+            <div id="addCategoryError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
 
             <button type="submit" class="btn btn-primary w-full">Создать категорию</button>
         </form>
@@ -66,8 +62,29 @@
 <script>
     let selectedColor = '#ff7a00';
     let dragSourceId = null;
+    let currentFlatCategories = [];
 
-    const categoryData = {{ categories | tojson | safe }};
+    // Загрузка дерева категорий
+    async function loadCategoryTree() {
+        const container = document.getElementById('categoryTree');
+        container.innerHTML = '<div class="text-center text-secondary">Загрузка...</div>';
+
+        try {
+            const response = await fetch('/api/categories-tree');
+            const data = await response.json();
+
+            if (data.success) {
+                currentFlatCategories = data.flat;
+                renderTree(data.tree);
+                updateParentSelect();
+            } else {
+                container.innerHTML = '<div class="text-center text-secondary">Ошибка загрузки категорий</div>';
+            }
+        } catch (err) {
+            console.error('Error loading categories:', err);
+            container.innerHTML = '<div class="text-center text-secondary">Ошибка соединения</div>';
+        }
+    }
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -122,30 +139,49 @@
         return html;
     }
 
-    function renderTree() {
+    function renderTree(treeData) {
         const container = document.getElementById('categoryTree');
-        if (container && categoryData.length > 0) {
-            const sortedRoot = [...categoryData].sort((a, b) =>
-                a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-            );
-
-            let html = `
-                <div class="drop-zone-root" id="dropZoneRoot">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 3v12m0 0-3-3m3 3 3-3"/>
-                        <path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>
-                    </svg>
-                    Перетащите сюда для перемещения в корень
-                </div>
-            `;
-            for (let cat of sortedRoot) {
-                html += renderCategoryHTML(cat, 0);
-            }
-            container.innerHTML = html;
-            initDragAndDrop();
-        } else if (container) {
+        if (!treeData || treeData.length === 0) {
             container.innerHTML = '<div class="text-center text-secondary">Нет категорий</div>';
+            return;
         }
+
+        const sortedRoot = [...treeData].sort((a, b) =>
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        );
+
+        let html = `
+            <div class="drop-zone-root" id="dropZoneRoot">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v12m0 0-3-3m3 3 3-3"/>
+                    <path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>
+                </svg>
+                Перетащите сюда для перемещения в корень
+            </div>
+        `;
+        for (let cat of sortedRoot) {
+            html += renderCategoryHTML(cat, 0);
+        }
+        container.innerHTML = html;
+        initDragAndDrop();
+    }
+
+    function updateParentSelect() {
+        const select = document.getElementById('cat_parent');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">— Корневая категория —</option>';
+
+        currentFlatCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            let indent = '';
+            for (let i = 0; i < cat.level; i++) indent += '&nbsp;&nbsp;&nbsp;&nbsp;';
+            if (cat.level > 0) indent += '↳ ';
+            option.innerHTML = `${indent}${escapeHtml(cat.name)} (${cat.type})`;
+            option.style.color = cat.color;
+            select.appendChild(option);
+        });
     }
 
     function initDragAndDrop() {
@@ -153,6 +189,12 @@
         const dropZoneRoot = document.getElementById('dropZoneRoot');
 
         draggables.forEach(draggable => {
+            draggable.removeEventListener('dragstart', handleDragStart);
+            draggable.removeEventListener('dragend', handleDragEnd);
+            draggable.removeEventListener('dragover', handleDragOver);
+            draggable.removeEventListener('dragleave', handleDragLeave);
+            draggable.removeEventListener('drop', handleDrop);
+
             draggable.addEventListener('dragstart', handleDragStart);
             draggable.addEventListener('dragend', handleDragEnd);
             draggable.addEventListener('dragover', handleDragOver);
@@ -161,6 +203,10 @@
         });
 
         if (dropZoneRoot) {
+            dropZoneRoot.removeEventListener('dragover', handleRootDragOver);
+            dropZoneRoot.removeEventListener('dragleave', handleRootDragLeave);
+            dropZoneRoot.removeEventListener('drop', handleRootDrop);
+
             dropZoneRoot.addEventListener('dragover', handleRootDragOver);
             dropZoneRoot.addEventListener('dragleave', handleRootDragLeave);
             dropZoneRoot.addEventListener('drop', handleRootDrop);
@@ -189,19 +235,15 @@
         if (!target || parseInt(target.dataset.id) === dragSourceId) return;
 
         e.dataTransfer.dropEffect = 'move';
-
-        target.classList.remove('drag-over');
         target.classList.add('drag-over');
     }
 
     function handleDragLeave(e) {
         const target = e.target.closest('.category-item');
-        if (target) {
-            target.classList.remove('drag-over');
-        }
+        if (target) target.classList.remove('drag-over');
     }
 
-    function handleDrop(e) {
+    async function handleDrop(e) {
         e.preventDefault();
         const targetItem = e.target.closest('.category-item');
         if (!targetItem || !dragSourceId || parseInt(targetItem.dataset.id) === dragSourceId) return;
@@ -212,27 +254,28 @@
             el.classList.remove('drag-over');
         });
 
-        fetch('/category/move', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                category_id: dragSourceId,
-                target_id: targetId,
-                position: 'inside'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
+        try {
+            const response = await fetch('/category/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    category_id: dragSourceId,
+                    target_id: targetId,
+                    position: 'inside'
+                })
+            });
+
+            const data = await response.json();
+
             if (data.success) {
                 showFlash('Категория перемещена внутрь', 'success');
-                location.reload();
+                await loadCategoryTree();
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             showFlash('Ошибка сервера', 'danger');
-        });
+        }
     }
 
     function handleRootDragOver(e) {
@@ -246,39 +289,38 @@
 
     function handleRootDragLeave(e) {
         const dropZone = document.getElementById('dropZoneRoot');
-        if (dropZone) {
-            dropZone.classList.remove('drag-over');
-        }
+        if (dropZone) dropZone.classList.remove('drag-over');
     }
 
-    function handleRootDrop(e) {
+    async function handleRootDrop(e) {
         e.preventDefault();
         const dropZone = document.getElementById('dropZoneRoot');
         if (dropZone) dropZone.classList.remove('drag-over');
 
         if (!dragSourceId) return;
 
-        fetch('/category/move', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                category_id: dragSourceId,
-                target_id: null,
-                position: 'root'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
+        try {
+            const response = await fetch('/category/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    category_id: dragSourceId,
+                    target_id: null,
+                    position: 'root'
+                })
+            });
+
+            const data = await response.json();
+
             if (data.success) {
                 showFlash('Категория перемещена в корень', 'success');
-                location.reload();
+                await loadCategoryTree();
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             showFlash('Ошибка сервера', 'danger');
-        });
+        }
     }
 
     function openColorPickerForCategory() {
@@ -290,29 +332,30 @@
     }
 
     function editCategoryColor(id, currentColor) {
-        openColorPicker(currentColor, function(color) {
-            updateCategoryColor(id, color);
-        });
-    }
+        openColorPicker(currentColor, async function(color) {
+            try {
+                const response = await fetch(`/category/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ color: color })
+                });
 
-    function updateCategoryColor(id, color) {
-        fetch(`/category/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ color: color })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showFlash('Цвет категории обновлён', 'success');
-                location.reload();
-            } else {
-                showFlash('Ошибка: ' + data.error, 'danger');
+                const data = await response.json();
+
+                if (data.success) {
+                    showFlash('Цвет категории обновлён', 'success');
+                    await loadCategoryTree();
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
+                }
+            } catch (err) {
+                showFlash('Ошибка сервера', 'danger');
             }
         });
     }
 
-    document.getElementById('addCategoryForm').addEventListener('submit', function(e) {
+    // Добавление категории
+    document.getElementById('addCategoryForm').addEventListener('submit', async function(e) {
         e.preventDefault();
 
         const data = {
@@ -322,65 +365,94 @@
             parent_id: document.getElementById('cat_parent').value || null
         };
 
-        fetch('{{ url_for("main.add_category") }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.id) {
+        const errorDiv = document.getElementById('addCategoryError');
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+
+        errorDiv.style.display = 'none';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Создание...';
+
+        try {
+            const response = await fetch('{{ url_for("main.add_category") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (result.id) {
                 showFlash('Категория добавлена', 'success');
-                location.reload();
+                // Очищаем форму
+                document.getElementById('cat_name').value = '';
+                document.getElementById('cat_type').value = 'Расход';
+                document.getElementById('cat_parent').value = '';
+                selectedColor = '#ff7a00';
+                document.getElementById('categoryColorDisplay').style.background = selectedColor;
+                await loadCategoryTree();
             } else {
-                showFlash('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'danger');
+                errorDiv.textContent = result.error || 'Неизвестная ошибка';
+                errorDiv.style.display = 'block';
             }
-        })
-        .catch(error => {
-            showFlash('Ошибка сервера', 'danger');
-        });
+        } catch (error) {
+            errorDiv.textContent = 'Ошибка сервера';
+            errorDiv.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
     });
 
     function deleteCategory(id, hasChildren) {
-        showDeleteCategoryModal(id, hasChildren, function(categoryId, action) {
-            fetch(`/category/${categoryId}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: action })
-            })
-            .then(response => response.json())
-            .then(data => {
+        showDeleteCategoryModal(id, hasChildren, async function(categoryId, action) {
+            try {
+                const response = await fetch(`/category/${categoryId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                });
+
+                const data = await response.json();
+
                 if (data.success) {
                     showFlash('Категория удалена', 'success');
-                    location.reload();
+                    await loadCategoryTree();
                 } else {
                     showFlash('Ошибка: ' + data.error, 'danger');
                 }
-            });
+            } catch (err) {
+                showFlash('Ошибка сервера', 'danger');
+            }
         });
     }
 
     function editCategoryName(id, currentName) {
-        openRenameModal(id, currentName, function(categoryId, newName) {
-            fetch(`/category/${categoryId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName })
-            })
-            .then(response => response.json())
-            .then(data => {
+        openRenameModal(id, currentName, async function(categoryId, newName) {
+            try {
+                const response = await fetch(`/category/${categoryId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+
+                const data = await response.json();
+
                 if (data.success) {
                     showFlash('Категория переименована', 'success');
-                    location.reload();
+                    await loadCategoryTree();
                 } else {
                     showFlash('Ошибка: ' + data.error, 'danger');
                 }
-            });
+            } catch (err) {
+                showFlash('Ошибка сервера', 'danger');
+            }
         });
     }
 
+    // Инициализация
     document.addEventListener('DOMContentLoaded', function() {
-        renderTree();
+        loadCategoryTree();
     });
 </script>
 {% endblock %}

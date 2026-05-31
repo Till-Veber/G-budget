@@ -54,7 +54,7 @@
     <!-- Форма добавления транзакции -->
     <div class="card">
         <h3 class="card-title">Добавить операцию</h3>
-        <form method="POST" action="{{ url_for('main.add_transaction') }}">
+        <form id="addTransactionForm">
             <div class="form-group">
                 <label for="category_id">Категория</label>
                 <select id="category_id" name="category_id" required>
@@ -72,7 +72,7 @@
                 <label for="amount">Сумма</label>
                 <div class="number-input-wrapper">
                     <button type="button" class="btn-number" onclick="changeAmount(-10)">−</button>
-                    <input type="number" id="amount" name="amount" placeholder="0" step="0.01" min="0" value="0.00">
+                    <input type="number" id="amount" name="amount" placeholder="0" step="0.01" min="0" value="0.00" required>
                     <button type="button" class="btn-number" onclick="changeAmount(10)">+</button>
                 </div>
             </div>
@@ -92,6 +92,8 @@
                 <label for="comment">Комментарий</label>
                 <textarea id="comment" name="comment" placeholder="Описание операции..."></textarea>
             </div>
+
+            <div id="transactionFormError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
 
             <button type="submit" class="btn btn-primary w-full">Сохранить транзакцию</button>
         </form>
@@ -519,6 +521,183 @@
         categoryStack = [];
         currentCategoryId = {{ chart_data.current_category_id | tojson }};
         updateChart(currentCategoryId, false);
+    });
+
+
+    // Функция для обновления статистики (баланс, расходы)
+    async function updateStats() {
+        try {
+            const response = await fetch('/api/dashboard-stats');
+            const data = await response.json();
+
+            if (data.success) {
+                // Обновляем карточки статистики
+                const balanceEl = document.querySelector('.stat-card:first-child .stat-value');
+                const balanceChangeEl = document.querySelector('.stat-card:first-child .stat-change');
+                const expensesEl = document.querySelector('.stat-card:nth-child(2) .stat-value');
+                const progressBar = document.querySelector('.stat-card:nth-child(2) .progress-bar');
+                const progressPercent = document.querySelector('.stat-card:nth-child(2) .progress-label span:last-child');
+                const membersCountEl = document.querySelector('.stat-card:nth-child(3) .stat-value');
+
+                if (balanceEl) balanceEl.textContent = data.balance.toFixed(2);
+                if (balanceChangeEl) {
+                    const change = data.balance_change;
+                    balanceChangeEl.innerHTML = change >= 0 ? `+${change.toFixed(1)}% за месяц` : `${change.toFixed(1)}% за месяц`;
+                    balanceChangeEl.className = `stat-change ${change < 0 ? 'negative' : ''}`;
+                }
+                if (expensesEl) expensesEl.textContent = data.month_expenses.toFixed(2);
+                if (progressBar && data.expense_percent !== undefined) {
+                    progressBar.style.width = `${data.expense_percent}%`;
+                    if (data.expense_percent > 90) progressBar.classList.add('warning');
+                }
+                if (progressPercent && data.expense_percent !== undefined) {
+                    progressPercent.textContent = `${data.expense_percent}%`;
+                }
+                if (membersCountEl) membersCountEl.textContent = data.members_count;
+            }
+        } catch (err) {
+            console.error('Error updating stats:', err);
+        }
+    }
+
+    // Функция для обновления списка последних транзакций
+    async function updateLastTransactions() {
+        try {
+            const response = await fetch('/api/last-transactions');
+            const data = await response.json();
+
+            if (data.success && data.transactions) {
+                const tbody = document.querySelector('.table-container tbody');
+                if (tbody && data.transactions.length > 0) {
+                    tbody.innerHTML = data.transactions.map(txn => `
+                        <tr>
+                            <td>${txn.date}</td>
+                            <td style="color: ${txn.category_color};">${txn.category_name}</td>
+                            <td style="color: ${txn.category_type === 'Расход' ? 'var(--error)' : 'var(--success)'}; font-weight: 600;">
+                                ${txn.category_type === 'Расход' ? '-' : '+'} ${txn.amount.toFixed(2)}
+                            </td>
+                            <td>${txn.author}</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+        } catch (err) {
+            console.error('Error updating transactions:', err);
+        }
+    }
+
+    // Функция для обновления диаграммы
+    async function updateChartData() {
+        const currentId = currentCategoryId;
+        await updateChart(currentId, false);
+    }
+
+    // Функция для обновления лимитов
+    async function updateLimits() {
+        try {
+            const response = await fetch('/api/limits-data');
+            const data = await response.json();
+
+            if (data.success && data.family_limits) {
+                const limitsContainer = document.querySelector('.card:last-child .grid-3');
+                if (limitsContainer && data.family_limits.length > 0) {
+                    limitsContainer.innerHTML = data.family_limits.map(limit => `
+                        <div class="limit-item ${limit.is_exceeded ? 'limit-exceeded' : ''}">
+                            <div class="progress-label">
+                                <span class="${limit.is_exceeded ? 'text-error' : ''}">${limit.category_name}</span>
+                                <span class="${limit.is_exceeded ? 'text-error' : ''}">
+                                    ${limit.spent.toFixed(0)} / ${limit.limit_amount.toFixed(0)}
+                                    ${limit.is_exceeded ? '<span class="exceeded-badge">Превышен!</span>' : ''}
+                                </span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar ${limit.percent > 90 ? 'warning' : ''} ${limit.is_exceeded ? 'danger' : ''}" style="width: ${limit.percent}%"></div>
+                            </div>
+                            ${limit.is_exceeded ? `
+                            <div class="exceeded-warning">
+                                Превышение на ${(limit.spent - limit.limit_amount).toFixed(0)} ₽
+                            </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+        } catch (err) {
+            console.error('Error updating limits:', err);
+        }
+    }
+
+    // Обработчик отправки формы транзакции
+    document.getElementById('addTransactionForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const errorDiv = document.getElementById('transactionFormError');
+        const originalBtnText = submitBtn.textContent;
+
+        // Скрываем предыдущую ошибку
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+
+        // Блокируем кнопку
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Сохранение...';
+
+        try {
+            const response = await fetch('{{ url_for("main.add_transaction") }}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Показываем предупреждение о лимите, если есть
+                if (data.warning) {
+                    showFlash(data.warning, 'warning');
+                } else {
+                    showFlash('Транзакция успешно добавлена', 'success');
+                }
+
+                // Обновляем все блоки на странице
+                await Promise.all([
+                    updateStats(),
+                    updateLastTransactions(),
+                    updateChartData(),
+                    updateLimits()
+                ]);
+
+                // Очищаем форму, оставляя сегодняшнюю дату и время
+                document.getElementById('category_id').value = '';
+                document.getElementById('amount').value = '0.00';
+                document.getElementById('comment').value = '';
+
+                // Устанавливаем текущую дату и время
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                document.getElementById('date').value = `${year}-${month}-${day}`;
+
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('time').value = `${hours}:${minutes}`;
+
+            } else {
+                errorDiv.textContent = data.error || 'Ошибка при сохранении транзакции';
+                errorDiv.style.display = 'block';
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Ошибка соединения с сервером';
+            errorDiv.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
     });
 </script>
 {% endblock %}

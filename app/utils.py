@@ -136,6 +136,7 @@ def build_chart_items(parent_category, user_ids, date_start, date_end=None, cate
 def calculate_limit_status(user, category, new_amount, date):
     """Проверка личных и семейных лимитов с учётом периода и вложенности"""
     month_start = date.replace(day=1)
+
     if month_start.month == 12:
         next_month_start = month_start.replace(year=month_start.year + 1, month=1)
     else:

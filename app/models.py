@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 
+
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     surname = db.Column(db.String(50), nullable=False)
@@ -11,7 +12,7 @@ class User(db.Model, UserMixin):
     patronymic = db.Column(db.String(50))
     login = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='Участник') # Создатель / Администратор / Участник
+    role = db.Column(db.String(20), default='Участник')
     reg_date = db.Column(db.Date, default=datetime.utcnow)
     family_id = db.Column(db.Integer, db.ForeignKey('family.id'), nullable=True)
 
@@ -20,18 +21,22 @@ class User(db.Model, UserMixin):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
 
 class Family(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.Date, default=datetime.utcnow)
     creator_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
     members = db.relationship('User', backref='family', lazy='dynamic', foreign_keys='User.family_id')
     categories = db.relationship('Category', backref='family', lazy='dynamic', cascade='all, delete-orphan')
     invitations = db.relationship('Invitation', backref='family', lazy='dynamic', cascade='all, delete-orphan')
     family_plans = db.relationship('FamilyPlan', backref='family', lazy='dynamic', cascade='all, delete-orphan')
+
 
 class Invitation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -49,8 +54,10 @@ class Category(db.Model):
     type = db.Column(db.String(10), default='Расход')
     color = db.Column(db.String(7), default='#6c757d')
     is_protected = db.Column(db.Boolean, default=False)
+
     children = db.relationship('Category', backref=db.backref('parent', remote_side=[id]), lazy='dynamic')
     transactions = db.relationship('Transaction', backref='category', lazy='dynamic', cascade='all, delete-orphan')
+
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -61,6 +68,7 @@ class Transaction(db.Model):
     time = db.Column(db.Time, nullable=False, default=lambda: datetime.utcnow().time())
     comment = db.Column(db.String(255))
 
+
 class FamilyPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     family_id = db.Column(db.Integer, db.ForeignKey('family.id'), nullable=False)
@@ -68,6 +76,7 @@ class FamilyPlan(db.Model):
     limit_amount = db.Column(db.Numeric(10, 2), nullable=False)
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
+
 
 class UserPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)

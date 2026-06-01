@@ -21,9 +21,13 @@ instance/*.sqlite3
 
 # Flask
 instance/
-.env
 .flaskenv
 .wsgi
+
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -50,7 +54,7 @@ htmlcov/
 dist/
 build/
 
-# Migrations (если используете Flask-Migrate)
+# Migrations
 migrations/__pycache__/
 migrations/versions/*.pyc
 
@@ -60,7 +64,16 @@ migrations/versions/*.pyc
 *.tmp
 
 # Secrets
-config_local.py
 secrets.py
 *.key
 *.pem
+
+# Дополнительно для macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Дополнительно для Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

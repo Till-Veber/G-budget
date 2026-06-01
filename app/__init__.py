@@ -11,8 +11,14 @@ login_manager.login_message = 'Пожалуйста, войдите в сист�
 
 
 def create_app():
-    # Корректное определение корня проекта
-    app = Flask(__name__)
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    project_root = os.path.dirname(basedir)
+
+    app = Flask(
+        __name__,
+        static_folder=os.path.join(project_root, 'static'),
+        static_url_path='/static'
+    )
 
     app.config.from_object(Config)
 

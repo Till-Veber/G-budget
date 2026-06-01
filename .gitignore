@@ -64,3 +64,36 @@ config_local.py
 secrets.py
 *.key
 *.pem
+
+# Flask session
+flask_session/
+
+# Python compiled
+*.pyc
+
+# Backup files (у вас уже есть, но уточним)
+*.db-journal
+
+# Environment variables
+.env.local
+.env.*.local
+
+# VS Code specific
+.vscode/settings.json
+
+# JetBrains specific
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dataSources.local.xml
+.idea/sqlDataSources.xml
+.idea/dynamic.xml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

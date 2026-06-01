@@ -150,9 +150,7 @@
         </div>
         <div class="donut-chart-wrapper">
             <svg class="donut-chart" viewBox="0 0 500 500" id="donutChart">
-                <g transform="rotate(-90 250 250)" id="donutSegments">
-                    <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
-                </g>
+                <g transform="rotate(-90 250 250)" id="donutSegments"></g>
                 <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="donutTotal">0 ₽</text>
             </svg>
             <div class="chart-legend" id="chartLegend"></div>
@@ -259,84 +257,57 @@
     let chartData = {{ chart_data | tojson | safe }};
     let currentCategoryId = {{ chart_data.current_category_id | tojson }};
     let categoryStack = [];
+    let visibleItemsMap = {};
 
-    function updateChart(categoryId = null, isBackNavigation = false) {
-        const url = categoryId
-            ? `/api/chart-data?category_id=${categoryId}`
-            : '/api/chart-data';
-
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showFlash(data.error, 'danger');
-                    return;
-                }
-
-                if (!isBackNavigation && categoryId !== null && categoryId !== currentCategoryId) {
-                    if (currentCategoryId !== null) {
-                        categoryStack.push(currentCategoryId);
-                    }
-                }
-
-                currentCategoryId = data.current_category_id;
-                chartData = data;
-                renderChart(data);
-
-                const backButton = document.getElementById('backButton');
-                const pathSpan = document.getElementById('currentCategoryPath');
-
-                if (data.current_category_id !== null && data.current_category_name) {
-                    pathSpan.textContent = data.current_category_name;
-                    backButton.style.display = 'inline-flex';
-                } else {
-                    pathSpan.textContent = 'Все категории';
-                    backButton.style.display = 'none';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showFlash('Ошибка загрузки данных диаграммы', 'danger');
-            });
-    }
-
-    function goBack() {
-        if (categoryStack.length > 0) {
-            const parentId = categoryStack.pop();
-            updateChart(parentId, true);
-        } else {
-            updateChart(null, true);
+    // Функция для обновления видимости
+    function toggleCategory(itemId) {
+        if (visibleItemsMap[itemId] === undefined) {
+            visibleItemsMap[itemId] = true;
         }
+        visibleItemsMap[itemId] = !visibleItemsMap[itemId];
+
+        const legendItem = document.querySelector(`.legend-item[data-id="${itemId}"]`);
+        if (legendItem) {
+            if (!visibleItemsMap[itemId]) {
+                legendItem.classList.add('disabled');
+            } else {
+                legendItem.classList.remove('disabled');
+            }
+        }
+
+        updateChartData();
     }
 
-    function renderChart(data) {
-        const circumference = 1130.97;
-        const segmentsGroup = document.getElementById('donutSegments');
-        const totalText = document.getElementById('donutTotal');
-        const legendDiv = document.getElementById('chartLegend');
+    function updateChartData() {
+        if (!chartData || !chartData.items) return;
 
-        segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
-        legendDiv.innerHTML = '';
-
-        if (!data.items || data.items.length === 0) {
-            totalText.textContent = '0 ₽';
-            legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+        const total = chartData.total;
+        if (total === 0) {
+            document.getElementById('donutTotal').textContent = '0 ₽';
+            document.getElementById('donutSegments').innerHTML = '';
             return;
         }
 
-        totalText.textContent = Math.round(data.total) + ' ₽';
+        const visibleItems = chartData.items.filter(item => visibleItemsMap[item.id] !== false);
+        const visibleTotal = visibleItems.reduce((sum, item) => sum + item.value, 0);
 
-        const oldStyle = document.getElementById('donut-dynamic-styles');
-        if (oldStyle) oldStyle.remove();
+        if (visibleTotal === 0) {
+            document.getElementById('donutTotal').textContent = '0 ₽';
+            document.getElementById('donutSegments').innerHTML = '';
+            return;
+        }
 
-        const style = document.createElement('style');
-        style.id = 'donut-dynamic-styles';
+        document.getElementById('donutTotal').textContent = Math.round(visibleTotal) + ' ₽';
+
+        const circumference = 1130.97;
+        const segmentsGroup = document.getElementById('donutSegments');
+        const oldSegments = segmentsGroup.querySelectorAll('.donut-segment');
+        oldSegments.forEach(seg => seg.remove());
 
         let cumulativeOffset = 0;
-        const items = data.items;
 
-        items.forEach((item, index) => {
-            const percent = (item.value / data.total) * 100;
+        visibleItems.forEach((item, index) => {
+            const percent = (item.value / visibleTotal) * 100;
             const length = (percent / 100) * circumference;
             const segmentClass = `donut-segment-${Date.now()}-${index}`;
             const color = item.color || '#6c757d';
@@ -354,9 +325,9 @@
             circle.setAttribute('data-has-children', item.has_children);
 
             circle.classList.add('donut-segment', segmentClass);
-            circle.style.strokeDasharray = `${length} ${circumference}`;
-            circle.style.strokeDashoffset = -cumulativeOffset;
-            circle.style.transition = 'stroke-dasharray 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s ease, filter 0.3s ease';
+            circle.style.strokeDasharray = `0 ${circumference}`;
+            circle.style.strokeDashoffset = `-${cumulativeOffset}`;
+            circle.style.transition = 'stroke-dasharray 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s ease, filter 0.3s ease';
 
             if (item.has_children === true && item.id !== null) {
                 circle.style.cursor = 'pointer';
@@ -364,67 +335,149 @@
                     e.stopPropagation();
                     updateChart(item.id, false);
                 });
-            } else if (item.id === null) {
-                circle.style.cursor = 'default';
             }
 
             segmentsGroup.appendChild(circle);
 
-            style.textContent += `
+            setTimeout(() => {
+                circle.style.strokeDasharray = `${length} ${circumference}`;
+            }, 50);
+
+            const style = document.createElement('style');
+            style.textContent = `
                 .${segmentClass}:hover {
                     stroke-width: 48px !important;
                     filter: drop-shadow(0 0 25px ${color}) !important;
                     cursor: ${item.has_children && item.id !== null ? 'pointer' : 'default'};
                 }
             `;
+            document.head.appendChild(style);
 
-            const legendItem = document.createElement('div');
-            legendItem.className = 'legend-item';
-            legendItem.innerHTML = `
-                <span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span>
-                ${item.name} (${percent.toFixed(1)}%)
-            `;
-
-            if (item.has_children === true && item.id !== null) {
-                legendItem.style.cursor = 'pointer';
-                legendItem.addEventListener('click', () => updateChart(item.id, false));
-            } else if (item.id === null) {
-                legendItem.style.cursor = 'default';
-            }
-
-            circle.addEventListener('mouseenter', () => {
-                legendItem.style.opacity = '0.7';
-                legendItem.style.transform = 'translateX(5px)';
-            });
-            circle.addEventListener('mouseleave', () => {
-                legendItem.style.opacity = '1';
-                legendItem.style.transform = 'translateX(0)';
-            });
-
-            legendDiv.appendChild(legendItem);
             cumulativeOffset += length;
         });
 
-        document.head.appendChild(style);
+        attachTooltipEvents();
+    }
 
+    function attachTooltipEvents() {
         const tooltip = document.getElementById('donut-tooltip');
         document.querySelectorAll('#donutSegments .donut-segment').forEach(seg => {
-            seg.addEventListener('mouseenter', (e) => {
+            seg.removeEventListener('mouseenter', seg._mouseenterHandler);
+            seg.removeEventListener('mousemove', seg._mousemoveHandler);
+            seg.removeEventListener('mouseleave', seg._mouseleaveHandler);
+
+            const mouseenterHandler = () => {
                 tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
                 tooltip.classList.add('visible');
-            });
-            seg.addEventListener('mousemove', (e) => {
+            };
+            const mousemoveHandler = (e) => {
                 let x = e.clientX + 16;
                 let y = e.clientY - 16;
                 if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
                 if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
                 tooltip.style.left = `${x}px`;
                 tooltip.style.top = `${y}px`;
-            });
-            seg.addEventListener('mouseleave', () => {
+            };
+            const mouseleaveHandler = () => {
                 tooltip.classList.remove('visible');
-            });
+            };
+
+            seg._mouseenterHandler = mouseenterHandler;
+            seg._mousemoveHandler = mousemoveHandler;
+            seg._mouseleaveHandler = mouseleaveHandler;
+
+            seg.addEventListener('mouseenter', mouseenterHandler);
+            seg.addEventListener('mousemove', mousemoveHandler);
+            seg.addEventListener('mouseleave', mouseleaveHandler);
         });
+    }
+
+    function renderLegend(data) {
+        const legendDiv = document.getElementById('chartLegend');
+        legendDiv.innerHTML = '';
+
+        if (!data.items || data.items.length === 0) {
+            legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+            return;
+        }
+
+        data.items.forEach(item => {
+            if (visibleItemsMap[item.id] === undefined) {
+                visibleItemsMap[item.id] = true;
+            }
+
+            const percent = (item.value / data.total) * 100;
+            const legendItem = document.createElement('div');
+            legendItem.className = `legend-item ${!visibleItemsMap[item.id] ? 'disabled' : ''}`;
+            legendItem.setAttribute('data-id', item.id);
+            legendItem.innerHTML = `
+                <span class="legend-color" style="background: ${item.color}; box-shadow: 0 0 10px ${item.color};"></span>
+                ${item.name} (${percent.toFixed(1)}%)
+            `;
+
+            legendItem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleCategory(item.id);
+            });
+
+            legendDiv.appendChild(legendItem);
+        });
+    }
+
+    async function updateChart(categoryId = null, isBackNavigation = false) {
+        const url = categoryId
+            ? `/api/chart-data?category_id=${categoryId}`
+            : '/api/chart-data';
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                showFlash(data.error, 'danger');
+                return;
+            }
+
+            if (!isBackNavigation && categoryId !== null && categoryId !== currentCategoryId) {
+                if (currentCategoryId !== null) {
+                    categoryStack.push(currentCategoryId);
+                }
+            }
+
+            currentCategoryId = data.current_category_id;
+            chartData = data;
+
+            visibleItemsMap = {};
+            chartData.items.forEach(item => {
+                visibleItemsMap[item.id] = true;
+            });
+
+            renderLegend(chartData);
+            updateChartData();
+
+            const backButton = document.getElementById('backButton');
+            const pathSpan = document.getElementById('currentCategoryPath');
+
+            if (data.current_category_id !== null && data.current_category_name) {
+                pathSpan.textContent = data.current_category_name;
+                backButton.style.display = 'inline-flex';
+            } else {
+                pathSpan.textContent = 'Все категории';
+                backButton.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showFlash('Ошибка загрузки данных диаграммы', 'danger');
+        }
+    }
+
+    function goBack() {
+        if (categoryStack.length > 0) {
+            const parentId = categoryStack.pop();
+            updateChart(parentId, true);
+        } else {
+            updateChart(null, true);
+        }
     }
 
     function changeAmount(delta) {
@@ -523,15 +576,12 @@
         updateChart(currentCategoryId, false);
     });
 
-
-    // Функция для обновления статистики (баланс, расходы)
     async function updateStats() {
         try {
             const response = await fetch('/api/dashboard-stats');
             const data = await response.json();
 
             if (data.success) {
-                // Обновляем карточки статистики
                 const balanceEl = document.querySelector('.stat-card:first-child .stat-value');
                 const balanceChangeEl = document.querySelector('.stat-card:first-child .stat-change');
                 const expensesEl = document.querySelector('.stat-card:nth-child(2) .stat-value');
@@ -560,7 +610,6 @@
         }
     }
 
-    // Функция для обновления списка последних транзакций
     async function updateLastTransactions() {
         try {
             const response = await fetch('/api/last-transactions');
@@ -586,13 +635,11 @@
         }
     }
 
-    // Функция для обновления диаграммы
-    async function updateChartData() {
+    async function updateChartDataFromAPI() {
         const currentId = currentCategoryId;
         await updateChart(currentId, false);
     }
 
-    // Функция для обновления лимитов
     async function updateLimits() {
         try {
             const response = await fetch('/api/limits-data');
@@ -627,7 +674,6 @@
         }
     }
 
-    // Обработчик отправки формы транзакции
     document.getElementById('addTransactionForm').addEventListener('submit', async function(e) {
         e.preventDefault();
 
@@ -636,11 +682,9 @@
         const errorDiv = document.getElementById('transactionFormError');
         const originalBtnText = submitBtn.textContent;
 
-        // Скрываем предыдущую ошибку
         errorDiv.style.display = 'none';
         errorDiv.textContent = '';
 
-        // Блокируем кнопку
         submitBtn.disabled = true;
         submitBtn.textContent = 'Сохранение...';
 
@@ -656,27 +700,23 @@
             const data = await response.json();
 
             if (data.success) {
-                // Показываем предупреждение о лимите, если есть
                 if (data.warning) {
                     showFlash(data.warning, 'warning');
                 } else {
                     showFlash('Транзакция успешно добавлена', 'success');
                 }
 
-                // Обновляем все блоки на странице
                 await Promise.all([
                     updateStats(),
                     updateLastTransactions(),
-                    updateChartData(),
+                    updateChartDataFromAPI(),
                     updateLimits()
                 ]);
 
-                // Очищаем форму, оставляя сегодняшнюю дату и время
                 document.getElementById('category_id').value = '';
                 document.getElementById('amount').value = '0.00';
                 document.getElementById('comment').value = '';
 
-                // Устанавливаем текущую дату и время
                 const now = new Date();
                 const year = now.getFullYear();
                 const month = String(now.getMonth() + 1).padStart(2, '0');

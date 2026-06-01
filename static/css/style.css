@@ -1196,6 +1196,65 @@ tbody tr:last-child td {
   font-size: 0.8rem;
 }
 
+
+/* ==================== АНИМАЦИЯ ЗАЧЁРКИВАНИЯ ДЛЯ ЛЕГЕНДЫ ==================== */
+.legend-item {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 8px;
+    border-radius: 20px;
+}
+
+.legend-item.disabled {
+    opacity: 0.6;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    text-decoration-color: var(--text-muted);
+    text-decoration-skip-ink: none;
+    transition: text-decoration-color 0.3s ease, opacity 0.3s ease;
+}
+
+.legend-item.disabled:hover {
+    opacity: 0.8;
+    text-decoration-color: var(--text-secondary);
+}
+
+/* Анимация для зачёркивания при выключении */
+.legend-item.disabled {
+    animation: strikeFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes strikeFadeIn {
+    0% {
+        text-decoration-color: transparent;
+        opacity: 1;
+    }
+    100% {
+        text-decoration-color: var(--text-muted);
+        opacity: 0.6;
+    }
+}
+
+/* Анимация для включения */
+.legend-item:not(.disabled) {
+    animation: strikeFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes strikeFadeOut {
+    0% {
+        text-decoration-color: var(--text-muted);
+        opacity: 0.6;
+    }
+    100% {
+        text-decoration-color: transparent;
+        opacity: 1;
+    }
+}
+
 /* ==================== ВЫБОР ЦВЕТА (COLOR PICKER) ==================== */
 .color-selector-wrapper {
   display: flex;

@@ -92,9 +92,7 @@
         </div>
         <div class="donut-chart-wrapper">
             <svg class="donut-chart" viewBox="0 0 500 500" id="donutChart">
-                <g transform="rotate(-90 250 250)" id="donutSegments">
-                    <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
-                </g>
+                <g transform="rotate(-90 250 250)" id="donutSegments"></g>
                 <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="donutTotal">0 ₽</text>
             </svg>
             <div class="chart-legend" id="chartLegend"></div>
@@ -110,9 +108,7 @@
         </div>
         <div class="donut-chart-wrapper">
             <svg class="donut-chart" viewBox="0 0 500 500" id="userDonutChart">
-                <g transform="rotate(-90 250 250)" id="userDonutSegments">
-                    <circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />
-                </g>
+                <g transform="rotate(-90 250 250)" id="userDonutSegments"></g>
                 <text class="donut-center-text" x="250" y="250" text-anchor="middle" dy="0.3em" id="userDonutTotal">0 ₽</text>
             </svg>
             <div class="chart-legend" id="userChartLegend"></div>
@@ -151,12 +147,16 @@
     let currentPeriodType = 'month';
     let currentCategoryId = null;
     let categoryStack = [];
+    let visibleItemsMap = {};
+    let visibleUsersMap = {};
 
     document.getElementById('reportForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         currentDateOffset = 0;
         currentCategoryId = null;
         categoryStack = [];
+        visibleItemsMap = {};
+        visibleUsersMap = {};
         await loadReport();
     });
 
@@ -168,9 +168,11 @@
         if (groupBy === 'user') {
             categoryContainer.style.display = 'none';
             userContainer.style.display = 'block';
+            visibleUsersMap = {};
         } else {
             categoryContainer.style.display = 'block';
             userContainer.style.display = 'none';
+            visibleItemsMap = {};
         }
         loadReport();
     });
@@ -199,6 +201,7 @@
         updatePeriodLabel();
         currentCategoryId = null;
         categoryStack = [];
+        visibleItemsMap = {};
         loadReport();
     });
 
@@ -207,6 +210,7 @@
         updatePeriodLabel();
         currentCategoryId = null;
         categoryStack = [];
+        visibleItemsMap = {};
         loadReport();
     });
 
@@ -347,38 +351,74 @@
         }
     }
 
-    function renderCategoryDonutChart(data) {
-        const circumference = 1130.97;
-        const segmentsGroup = document.getElementById('donutSegments');
-        const totalText = document.getElementById('donutTotal');
-        const legendDiv = document.getElementById('chartLegend');
+    function toggleCategory(itemId) {
+        if (visibleItemsMap[itemId] === undefined) {
+            visibleItemsMap[itemId] = true;
+        }
+        visibleItemsMap[itemId] = !visibleItemsMap[itemId];
 
-        let items = data.items || [];
-        let total = data.total || 0;
+        const legendItem = document.querySelector(`.legend-item[data-id="${itemId}"]`);
+        if (legendItem) {
+            if (!visibleItemsMap[itemId]) {
+                legendItem.classList.add('disabled');
+            } else {
+                legendItem.classList.remove('disabled');
+            }
+        }
 
-        segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
-        legendDiv.innerHTML = '';
+        updateCategoryChartData();
+    }
 
-        if (!items.length || total === 0) {
-            totalText.textContent = '0 ₽';
-            legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+    function toggleUser(userId) {
+        if (visibleUsersMap[userId] === undefined) {
+            visibleUsersMap[userId] = true;
+        }
+        visibleUsersMap[userId] = !visibleUsersMap[userId];
+
+        const legendItem = document.querySelector(`.legend-user-item[data-id="${userId}"]`);
+        if (legendItem) {
+            if (!visibleUsersMap[userId]) {
+                legendItem.classList.add('disabled');
+            } else {
+                legendItem.classList.remove('disabled');
+            }
+        }
+
+        updateUserChartData();
+    }
+
+    function updateCategoryChartData() {
+        if (!currentReportData || !currentReportData.items) return;
+
+        const total = currentReportData.total;
+        if (total === 0) {
+            document.getElementById('donutTotal').textContent = '0 ₽';
+            document.getElementById('donutSegments').innerHTML = '';
             return;
         }
 
-        totalText.textContent = Math.round(total) + ' ₽';
+        const visibleItems = currentReportData.items.filter(item => visibleItemsMap[item.id] !== false);
+        const visibleTotal = visibleItems.reduce((sum, item) => sum + item.value, 0);
 
-        const oldStyle = document.getElementById('report-donut-styles');
-        if (oldStyle) oldStyle.remove();
+        if (visibleTotal === 0) {
+            document.getElementById('donutTotal').textContent = '0 ₽';
+            document.getElementById('donutSegments').innerHTML = '';
+            return;
+        }
 
-        const style = document.createElement('style');
-        style.id = 'report-donut-styles';
+        document.getElementById('donutTotal').textContent = Math.round(visibleTotal) + ' ₽';
+
+        const circumference = 1130.97;
+        const segmentsGroup = document.getElementById('donutSegments');
+        const oldSegments = segmentsGroup.querySelectorAll('.donut-segment');
+        oldSegments.forEach(seg => seg.remove());
 
         let cumulativeOffset = 0;
 
-        items.forEach((item, index) => {
-            const percent = (item.value / total) * 100;
+        visibleItems.forEach((item, index) => {
+            const percent = (item.value / visibleTotal) * 100;
             const length = (percent / 100) * circumference;
-            const segmentClass = `report-segment-${Date.now()}-${index}`;
+            const segmentClass = `donut-segment-${Date.now()}-${index}`;
             const color = item.color || '#6c757d';
 
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -390,88 +430,153 @@
             circle.setAttribute('stroke-width', '40');
             circle.setAttribute('data-name', item.name);
             circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
-            circle.setAttribute('data-id', item.id || '');
+            circle.setAttribute('data-id', item.id);
             circle.setAttribute('data-has-children', item.has_children);
 
             circle.classList.add('donut-segment', segmentClass);
-            circle.style.strokeDasharray = `${length} ${circumference}`;
-            circle.style.strokeDashoffset = -cumulativeOffset;
-            circle.style.transition = 'stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease, stroke-width 0.3s ease, filter 0.3s ease';
+            circle.style.strokeDasharray = `0 ${circumference}`;
+            circle.style.strokeDashoffset = `-${cumulativeOffset}`;
+            circle.style.transition = 'stroke-dasharray 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s ease, filter 0.3s ease';
 
-            if (item.has_children && item.id !== null) {
+            if (item.has_children === true && item.id !== null) {
                 circle.style.cursor = 'pointer';
-                circle.addEventListener('click', () => loadReport(item.id, false));
-            } else if (item.id === null) {
-                circle.style.cursor = 'default';
+                circle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    loadReport(item.id, false);
+                });
             }
 
             segmentsGroup.appendChild(circle);
 
-            style.textContent += `
+            setTimeout(() => {
+                circle.style.strokeDasharray = `${length} ${circumference}`;
+            }, 50);
+
+            const style = document.createElement('style');
+            style.textContent = `
                 .${segmentClass}:hover {
                     stroke-width: 48px !important;
                     filter: drop-shadow(0 0 25px ${color}) !important;
                     cursor: ${item.has_children && item.id !== null ? 'pointer' : 'default'};
                 }
             `;
+            document.head.appendChild(style);
 
-            const legendItem = document.createElement('div');
-            legendItem.className = 'legend-item';
-            legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
-
-            if (item.has_children && item.id !== null) {
-                legendItem.style.cursor = 'pointer';
-                legendItem.addEventListener('click', () => loadReport(item.id, false));
-            } else if (item.id === null) {
-                legendItem.style.cursor = 'default';
-            }
-
-            legendDiv.appendChild(legendItem);
             cumulativeOffset += length;
         });
 
-        document.head.appendChild(style);
+        attachCategoryTooltipEvents();
+    }
 
+    function attachCategoryTooltipEvents() {
         const tooltip = document.getElementById('donut-tooltip');
         document.querySelectorAll('#donutSegments .donut-segment').forEach(seg => {
-            seg.addEventListener('mouseenter', (e) => {
+            seg.removeEventListener('mouseenter', seg._mouseenterHandler);
+            seg.removeEventListener('mousemove', seg._mousemoveHandler);
+            seg.removeEventListener('mouseleave', seg._mouseleaveHandler);
+
+            const mouseenterHandler = () => {
                 tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
                 tooltip.classList.add('visible');
-            });
-            seg.addEventListener('mousemove', (e) => {
-                let x = e.clientX + 16, y = e.clientY - 16;
+            };
+            const mousemoveHandler = (e) => {
+                let x = e.clientX + 16;
+                let y = e.clientY - 16;
                 if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
                 if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
                 tooltip.style.left = `${x}px`;
                 tooltip.style.top = `${y}px`;
-            });
-            seg.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+            };
+            const mouseleaveHandler = () => {
+                tooltip.classList.remove('visible');
+            };
+
+            seg._mouseenterHandler = mouseenterHandler;
+            seg._mousemoveHandler = mousemoveHandler;
+            seg._mouseleaveHandler = mouseleaveHandler;
+
+            seg.addEventListener('mouseenter', mouseenterHandler);
+            seg.addEventListener('mousemove', mousemoveHandler);
+            seg.addEventListener('mouseleave', mouseleaveHandler);
         });
     }
 
-    function renderUserDonutChart(data) {
-        const circumference = 1130.97;
-        const segmentsGroup = document.getElementById('userDonutSegments');
-        const totalText = document.getElementById('userDonutTotal');
-        const legendDiv = document.getElementById('userChartLegend');
+    function renderCategoryDonutChart(data) {
+        const total = data.total || 0;
 
-        const reportType = document.getElementById('report_type').value;
-        const titleText = reportType === 'expenses' ? 'Расходы по пользователям' : 'Доходы по пользователям';
-        document.querySelector('#userChartContainer .card-title').textContent = titleText;
+        visibleItemsMap = {};
+        data.items.forEach(item => {
+            visibleItemsMap[item.id] = true;
+        });
 
-        let items = data.items || [];
-        let total = data.total || 0;
+        renderCategoryLegend(data);
+        updateCategoryChartData();
 
-        segmentsGroup.innerHTML = '<circle cx="250" cy="250" r="180" fill="none" stroke="var(--bg-secondary)" stroke-width="40" />';
+        const backButton = document.getElementById('backButton');
+        const pathSpan = document.getElementById('currentCategoryPath');
+
+        if (data.current_category_name) {
+            pathSpan.textContent = data.current_category_name;
+            backButton.style.display = 'inline-flex';
+        } else {
+            pathSpan.textContent = 'Все категории';
+            backButton.style.display = 'none';
+        }
+    }
+
+    function renderCategoryLegend(data) {
+        const legendDiv = document.getElementById('chartLegend');
         legendDiv.innerHTML = '';
 
-        if (!items.length || total === 0) {
-            totalText.textContent = '0 ₽';
+        if (!data.items || data.items.length === 0) {
             legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
             return;
         }
 
-        totalText.textContent = Math.round(total) + ' ₽';
+        data.items.forEach(item => {
+            const percent = (item.value / data.total) * 100;
+            const legendItem = document.createElement('div');
+            legendItem.className = `legend-item ${!visibleItemsMap[item.id] ? 'disabled' : ''}`;
+            legendItem.setAttribute('data-id', item.id);
+            legendItem.innerHTML = `
+                <span class="legend-color" style="background: ${item.color}; box-shadow: 0 0 10px ${item.color};"></span>
+                ${item.name} (${percent.toFixed(1)}%)
+            `;
+
+            legendItem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleCategory(item.id);
+            });
+
+            legendDiv.appendChild(legendItem);
+        });
+    }
+
+    function updateUserChartData() {
+        if (!currentReportData || !currentReportData.items) return;
+
+        const total = currentReportData.total;
+        if (total === 0) {
+            document.getElementById('userDonutTotal').textContent = '0 ₽';
+            document.getElementById('userDonutSegments').innerHTML = '';
+            return;
+        }
+
+        const visibleItems = currentReportData.items.filter(item => visibleUsersMap[item.id] !== false);
+        const visibleTotal = visibleItems.reduce((sum, item) => sum + item.value, 0);
+
+        if (visibleTotal === 0) {
+            document.getElementById('userDonutTotal').textContent = '0 ₽';
+            document.getElementById('userDonutSegments').innerHTML = '';
+            return;
+        }
+
+        document.getElementById('userDonutTotal').textContent = Math.round(visibleTotal) + ' ₽';
+
+        const circumference = 1130.97;
+        const segmentsGroup = document.getElementById('userDonutSegments');
+        const oldSegments = segmentsGroup.querySelectorAll('.donut-segment');
+        oldSegments.forEach(seg => seg.remove());
 
         let cumulativeOffset = 0;
         const userColors = [
@@ -480,33 +585,10 @@
             '#ec4899', '#84cc16', '#f97316', '#6366f1'
         ];
 
-        const oldStyle = document.getElementById('userDonutStyles');
-        if (oldStyle) oldStyle.remove();
-
-        const style = document.createElement('style');
-        style.id = 'userDonutStyles';
-        style.textContent = `
-            .donut-segment {
-                transition: stroke-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
-                cursor: pointer;
-            }
-        `;
-
-        for (let idx = 0; idx < items.length; idx++) {
-            const color = userColors[idx % userColors.length];
-            style.textContent += `
-                .donut-segment.seg-user-${idx}:hover {
-                    stroke-width: 48px;
-                    filter: drop-shadow(0 0 25px ${color});
-                }
-            `;
-        }
-        document.head.appendChild(style);
-
-        items.forEach((item, idx) => {
-            const percent = (item.value / total) * 100;
+        visibleItems.forEach((item, index) => {
+            const percent = (item.value / visibleTotal) * 100;
             const length = (percent / 100) * circumference;
-            const color = userColors[idx % userColors.length];
+            const color = userColors[index % userColors.length];
 
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', '250');
@@ -518,35 +600,114 @@
             circle.setAttribute('data-name', item.name);
             circle.setAttribute('data-value', `${item.value.toFixed(2)} ₽ (${percent.toFixed(1)}%)`);
             circle.setAttribute('data-id', item.id);
-            circle.classList.add('donut-segment', `seg-user-${idx}`);
 
-            circle.style.strokeDasharray = `${length} ${circumference}`;
-            circle.style.strokeDashoffset = -cumulativeOffset;
+            circle.classList.add('donut-segment', `user-segment-${index}`);
+            circle.style.strokeDasharray = `0 ${circumference}`;
+            circle.style.strokeDashoffset = `-${cumulativeOffset}`;
+            circle.style.transition = 'stroke-dasharray 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s ease, filter 0.3s ease';
 
             segmentsGroup.appendChild(circle);
 
-            const legendItem = document.createElement('div');
-            legendItem.className = 'legend-item';
-            legendItem.innerHTML = `<span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span> ${item.name} (${percent.toFixed(1)}%)`;
-            legendDiv.appendChild(legendItem);
+            setTimeout(() => {
+                circle.style.strokeDasharray = `${length} ${circumference}`;
+            }, 50);
+
+            const style = document.createElement('style');
+            style.textContent = `
+                .user-segment-${index}:hover {
+                    stroke-width: 48px !important;
+                    filter: drop-shadow(0 0 25px ${color}) !important;
+                    cursor: default;
+                }
+            `;
+            document.head.appendChild(style);
 
             cumulativeOffset += length;
         });
 
+        attachUserTooltipEvents();
+    }
+
+    function attachUserTooltipEvents() {
         const tooltip = document.getElementById('donut-tooltip');
         document.querySelectorAll('#userDonutSegments .donut-segment').forEach(seg => {
-            seg.addEventListener('mouseenter', (e) => {
+            seg.removeEventListener('mouseenter', seg._mouseenterHandler);
+            seg.removeEventListener('mousemove', seg._mousemoveHandler);
+            seg.removeEventListener('mouseleave', seg._mouseleaveHandler);
+
+            const mouseenterHandler = () => {
                 tooltip.innerHTML = `<div class="tooltip-name">${seg.dataset.name}</div><div class="tooltip-value">${seg.dataset.value}</div>`;
                 tooltip.classList.add('visible');
-            });
-            seg.addEventListener('mousemove', (e) => {
-                let x = e.clientX + 16, y = e.clientY - 16;
+            };
+            const mousemoveHandler = (e) => {
+                let x = e.clientX + 16;
+                let y = e.clientY - 16;
                 if (x + tooltip.offsetWidth > window.innerWidth) x = e.clientX - tooltip.offsetWidth - 16;
                 if (y + tooltip.offsetHeight > window.innerHeight) y = e.clientY - tooltip.offsetHeight - 16;
                 tooltip.style.left = `${x}px`;
                 tooltip.style.top = `${y}px`;
+            };
+            const mouseleaveHandler = () => {
+                tooltip.classList.remove('visible');
+            };
+
+            seg._mouseenterHandler = mouseenterHandler;
+            seg._mousemoveHandler = mousemoveHandler;
+            seg._mouseleaveHandler = mouseleaveHandler;
+
+            seg.addEventListener('mouseenter', mouseenterHandler);
+            seg.addEventListener('mousemove', mousemoveHandler);
+            seg.addEventListener('mouseleave', mouseleaveHandler);
+        });
+    }
+
+    function renderUserDonutChart(data) {
+        const total = data.total || 0;
+        const reportType = document.getElementById('report_type').value;
+        const titleText = reportType === 'expenses' ? 'Расходы по пользователям' : 'Доходы по пользователям';
+        document.querySelector('#userChartContainer .card-title').textContent = titleText;
+
+        visibleUsersMap = {};
+        data.items.forEach(item => {
+            visibleUsersMap[item.id] = true;
+        });
+
+        renderUserLegend(data);
+        updateUserChartData();
+    }
+
+    function renderUserLegend(data) {
+        const legendDiv = document.getElementById('userChartLegend');
+        legendDiv.innerHTML = '';
+
+        if (!data.items || data.items.length === 0) {
+            legendDiv.innerHTML = '<div class="text-center text-secondary">Нет данных</div>';
+            return;
+        }
+
+        const userColors = [
+            '#ff7a00', '#10b981', '#3b82f6', '#8b5cf6',
+            '#f59e0b', '#ef4444', '#22c55e', '#06b6d4',
+            '#ec4899', '#84cc16', '#f97316', '#6366f1'
+        ];
+
+        data.items.forEach((item, index) => {
+            const percent = (item.value / data.total) * 100;
+            const color = userColors[index % userColors.length];
+            const legendItem = document.createElement('div');
+            legendItem.className = `legend-item legend-user-item ${!visibleUsersMap[item.id] ? 'disabled' : ''}`;
+            legendItem.setAttribute('data-id', item.id);
+            legendItem.innerHTML = `
+                <span class="legend-color" style="background: ${color}; box-shadow: 0 0 10px ${color};"></span>
+                ${item.name} (${percent.toFixed(1)}%)
+            `;
+
+            legendItem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleUser(item.id);
             });
-            seg.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+
+            legendDiv.appendChild(legendItem);
         });
     }
 
@@ -649,6 +810,8 @@
     document.getElementById('report_type').addEventListener('change', () => {
         currentCategoryId = null;
         categoryStack = [];
+        visibleItemsMap = {};
+        visibleUsersMap = {};
         loadReport();
     });
 </script>

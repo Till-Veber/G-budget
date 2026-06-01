@@ -35,7 +35,7 @@ pip install -r requirements.txt
 ```
 
 ### 4. Создайте .env файл в корне проекта
-```commandline
+```bash
 SECRET_KEY=ваш-секретный-ключ-для-продакшена
 ```
 (Или по умолчанию подставится dev-secret-key-2026)

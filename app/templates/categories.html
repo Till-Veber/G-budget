@@ -6,7 +6,7 @@
 <div class="grid-2 mb-4">
     <div class="card">
         <h3 class="card-title">Добавить категорию</h3>
-        <form id="addCategoryForm">
+        <form id="addCategoryForm" onsubmit="event.preventDefault(); addCategory();">
             <div class="form-group">
                 <label for="cat_name">Название</label>
                 <input type="text" id="cat_name" required>
@@ -64,7 +64,6 @@
     let dragSourceId = null;
     let currentFlatCategories = [];
 
-    // Загрузка дерева категорий
     async function loadCategoryTree() {
         const container = document.getElementById('categoryTree');
         container.innerHTML = '<div class="text-center text-secondary">Загрузка...</div>';
@@ -354,10 +353,7 @@
         });
     }
 
-    // Добавление категории
-    document.getElementById('addCategoryForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-
+    async function addCategory() {
         const data = {
             name: document.getElementById('cat_name').value,
             type: document.getElementById('cat_type').value,
@@ -366,7 +362,7 @@
         };
 
         const errorDiv = document.getElementById('addCategoryError');
-        const submitBtn = this.querySelector('button[type="submit"]');
+        const submitBtn = document.querySelector('#addCategoryForm button[type="submit"]');
         const originalText = submitBtn.textContent;
 
         errorDiv.style.display = 'none';
@@ -384,7 +380,6 @@
 
             if (result.id) {
                 showFlash('Категория добавлена', 'success');
-                // Очищаем форму
                 document.getElementById('cat_name').value = '';
                 document.getElementById('cat_type').value = 'Расход';
                 document.getElementById('cat_parent').value = '';
@@ -402,7 +397,7 @@
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;
         }
-    });
+    }
 
     function deleteCategory(id, hasChildren) {
         showDeleteCategoryModal(id, hasChildren, async function(categoryId, action) {
@@ -450,7 +445,6 @@
         });
     }
 
-    // Инициализация
     document.addEventListener('DOMContentLoaded', function() {
         loadCategoryTree();
     });

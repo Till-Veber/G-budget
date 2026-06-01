@@ -35,7 +35,6 @@
     </div>
 </div>
 
-<!-- Модальное окно для редактирования транзакции -->
 <div class="modal-overlay" id="editTransactionModal" onclick="closeEditModalOnOverlay(event)">
     <div class="modal">
         <div class="modal-header">
@@ -43,7 +42,7 @@
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
         </div>
         <div class="modal-body">
-            <form id="editTransactionForm">
+            <form id="editTransactionForm" onsubmit="event.preventDefault(); saveTransactionEdit();">
                 <div class="form-group">
                     <label for="edit_category_id">Категория</label>
                     <select id="edit_category_id" required>
@@ -73,11 +72,12 @@
                 </div>
 
                 <div id="editError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
+
+                <div class="modal-footer" style="padding-top: 0; border-top: none; margin-top: 8px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
             </form>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
-            <button class="btn btn-primary" id="saveEditBtn">Сохранить</button>
         </div>
     </div>
 </div>
@@ -86,7 +86,6 @@
     let editingTransactionId = null;
     let categoriesData = [];
 
-    // Загрузка списка транзакций
     async function loadTransactions() {
         const tbody = document.getElementById('transactionsTableBody');
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">Загрузка...</td></tr>';
@@ -149,7 +148,6 @@
         return div.innerHTML;
     }
 
-    // Обновление категорий в модальном окне
     function updateCategoriesSelect(selectedId = null) {
         const select = document.getElementById('edit_category_id');
         if (!select) return;
@@ -180,7 +178,6 @@
         const time = row.querySelector('.time-cell').innerText;
         const comment = row.querySelector('.comment-cell').innerText;
 
-        // Обновляем список категорий
         updateCategoriesSelect(parseInt(categoryId));
 
         document.getElementById('edit_amount').value = amount;
@@ -188,11 +185,14 @@
         document.getElementById('edit_time').value = time !== '—' ? time : '12:00';
         document.getElementById('edit_comment').value = comment !== '—' ? comment : '';
 
-        // Скрываем предыдущую ошибку
         document.getElementById('editError').style.display = 'none';
 
         document.getElementById('editTransactionModal').classList.add('active');
         document.body.style.overflow = 'hidden';
+
+        setTimeout(() => {
+            document.getElementById('edit_amount').focus();
+        }, 100);
     }
 
     function closeEditModal() {
@@ -215,7 +215,7 @@
         const time = document.getElementById('edit_time').value;
         const comment = document.getElementById('edit_comment').value;
         const errorDiv = document.getElementById('editError');
-        const saveBtn = document.getElementById('saveEditBtn');
+        const saveBtn = document.querySelector('#editTransactionModal .btn-primary');
 
         if (!categoryId || !amount || !date) {
             errorDiv.textContent = 'Заполните обязательные поля';
@@ -224,8 +224,10 @@
         }
 
         errorDiv.style.display = 'none';
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Сохранение...';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+        }
 
         try {
             const response = await fetch(`/transaction/${editingTransactionId}`, {
@@ -245,18 +247,22 @@
             if (data.success) {
                 showFlash('Транзакция обновлена', 'success');
                 closeEditModal();
-                await loadTransactions(); // Обновляем таблицу без перезагрузки страницы
+                await loadTransactions();
             } else {
                 errorDiv.textContent = data.error || 'Ошибка при сохранении';
                 errorDiv.style.display = 'block';
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Сохранить';
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Сохранить';
+                }
             }
         } catch (err) {
             errorDiv.textContent = 'Ошибка соединения с сервером';
             errorDiv.style.display = 'block';
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Сохранить';
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить';
+            }
         }
     }
 
@@ -275,7 +281,7 @@
 
                     if (data.success) {
                         showFlash('Транзакция удалена', 'success');
-                        await loadTransactions(); // Обновляем таблицу без перезагрузки страницы
+                        await loadTransactions();
                     } else {
                         showFlash('Ошибка: ' + data.error, 'danger');
                     }
@@ -286,12 +292,14 @@
         );
     }
 
-    // Загружаем транзакции при загрузке страницы
     document.addEventListener('DOMContentLoaded', function() {
         loadTransactions();
-    });
 
-    // Обработчик для кнопки сохранения (чтобы избежать проблем с динамическим добавлением)
-    document.getElementById('saveEditBtn').addEventListener('click', saveTransactionEdit);
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeEditModal();
+            }
+        });
+    });
 </script>
 {% endblock %}

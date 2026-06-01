@@ -102,17 +102,17 @@
             <button class="modal-close" onclick="closeRenameFamilyModal()">&times;</button>
         </div>
         <div class="modal-body">
-            <form id="renameFamilyForm">
+            <form id="renameFamilyForm" onsubmit="event.preventDefault(); confirmRenameFamily();">
                 <div class="form-group">
                     <label for="rename_family_name">Новое название семьи</label>
                     <input type="text" id="rename_family_name" required maxlength="100">
                 </div>
                 <div id="renameFamilyError" class="alert alert-danger" style="display: none; margin-top: 16px;"></div>
+                <div class="modal-footer" style="padding-top: 0; border-top: none; margin-top: 16px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeRenameFamilyModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
             </form>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeRenameFamilyModal()">Отмена</button>
-            <button class="btn btn-primary" id="confirmRenameFamilyBtn">Сохранить</button>
         </div>
     </div>
 </div>
@@ -149,7 +149,6 @@
     let currentUserRole = '';
     let currentUserId = null;
 
-    // Загрузка данных семьи
     async function loadFamilyData() {
         try {
             const response = await fetch('/api/family-data');
@@ -160,11 +159,9 @@
                 currentUserRole = data.current_user_role;
                 currentUserId = data.current_user_id;
 
-                // Обновляем информацию о семье
                 document.getElementById('familyName').textContent = data.family.name;
                 document.getElementById('familyCreatedAt').textContent = `Создана: ${data.family.created_at}`;
 
-                // Показываем/скрываем кнопки в зависимости от роли
                 const renameBtn = document.getElementById('renameFamilyBtn');
                 const deleteBtn = document.getElementById('deleteFamilyBtn');
                 const adminActions = document.getElementById('adminActions');
@@ -183,13 +180,8 @@
                     if (adminActions) adminActions.style.display = 'none';
                 }
 
-                // Обновляем таблицу участников
                 renderMembers(data.members);
-
-                // Обновляем активные приглашения
                 renderActiveInvites(data.active_invites);
-
-                // Обновляем историю приглашений
                 renderOldInvites(data.old_invitations);
             } else {
                 showFlash('Ошибка загрузки данных', 'danger');
@@ -213,12 +205,10 @@
             let actionsHtml = '';
 
             if (member.is_current_user) {
-                // Текущий пользователь
                 const badgeClass = member.role === 'Создатель' ? 'badge-accent' : (member.role === 'Администратор' ? 'badge-warning' : 'badge-success');
                 roleHtml = `<span class="badge ${badgeClass}">${member.role}</span>`;
                 actionsHtml = `<button class="btn btn-outline" style="padding: 4px 12px; font-size: 0.8rem;" onclick="leaveFamily()">Покинуть</button>`;
             } else {
-                // Другой участник
                 if (currentUserRole === 'Создатель') {
                     roleHtml = `
                         <select onchange="changeRole(${member.id}, this.value)" class="role-select" style="background: var(--bg-secondary); padding: 4px 8px; border-radius: var(--radius-sm);">
@@ -277,7 +267,7 @@
                             <path d="M6 6l12 12"></path>
                         </svg>
                     </button>
-                 </td>
+                  </td>
             </tr>
         `).join('');
     }
@@ -324,12 +314,15 @@
         });
     }
 
-    // Переименование семьи
     function openRenameFamilyModal() {
         document.getElementById('rename_family_name').value = currentFamilyName;
         document.getElementById('renameFamilyError').style.display = 'none';
         document.getElementById('renameFamilyModal').classList.add('active');
         document.body.style.overflow = 'hidden';
+
+        setTimeout(() => {
+            document.getElementById('rename_family_name').focus();
+        }, 100);
     }
 
     function closeRenameFamilyModal() {
@@ -344,7 +337,7 @@
     async function confirmRenameFamily() {
         const newName = document.getElementById('rename_family_name').value.trim();
         const errorDiv = document.getElementById('renameFamilyError');
-        const saveBtn = document.getElementById('confirmRenameFamilyBtn');
+        const saveBtn = document.querySelector('#renameFamilyModal .btn-primary');
 
         if (!newName) {
             errorDiv.textContent = 'Название семьи не может быть пустым';
@@ -359,8 +352,10 @@
         }
 
         errorDiv.style.display = 'none';
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Сохранение...';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+        }
 
         try {
             const response = await fetch('/family/rename', {
@@ -379,17 +374,21 @@
             } else {
                 errorDiv.textContent = data.error || 'Ошибка при переименовании';
                 errorDiv.style.display = 'block';
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Сохранить';
+                }
             }
         } catch (err) {
             errorDiv.textContent = 'Ошибка соединения с сервером';
             errorDiv.style.display = 'block';
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Сохранить';
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить';
+            }
         }
     }
 
-    // Генерация кода приглашения
     async function generateInvite() {
         const btn = document.getElementById('generateInviteBtn');
         const originalText = btn.textContent;
@@ -406,7 +405,7 @@
 
             if (data.code) {
                 showFlash('Код приглашения создан: ' + data.code, 'success');
-                await loadFamilyData(); // Обновляем список приглашений
+                await loadFamilyData();
             } else {
                 showFlash('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'danger');
             }
@@ -418,7 +417,6 @@
         }
     }
 
-    // Отзыв приглашения
     async function deleteInvite(inviteId) {
         showConfirm(
             'Отозвать приглашение? Код станет недействительным.',
@@ -434,7 +432,7 @@
 
                     if (data.success) {
                         showFlash('Приглашение отозвано', 'success');
-                        await loadFamilyData(); // Обновляем список приглашений
+                        await loadFamilyData();
                     } else {
                         showFlash('Ошибка: ' + data.error, 'danger');
                     }
@@ -445,7 +443,6 @@
         );
     }
 
-    // Изменение роли участника
     async function changeRole(userId, newRole) {
         try {
             const response = await fetch('/family/change-role', {
@@ -458,7 +455,7 @@
 
             if (data.success) {
                 showFlash('Роль изменена', 'success');
-                await loadFamilyData(); // Обновляем таблицу участников
+                await loadFamilyData();
             } else {
                 showFlash('Ошибка: ' + data.error, 'danger');
             }
@@ -467,7 +464,6 @@
         }
     }
 
-    // Передача прав создателя
     async function transferOwnership(userId) {
         showConfirm(
             'Передать права создателя этому участнику? Вы станете администратором.',
@@ -484,7 +480,7 @@
 
                     if (data.success) {
                         showFlash('Права создателя переданы', 'success');
-                        await loadFamilyData(); // Обновляем все данные
+                        await loadFamilyData();
                     } else {
                         showFlash('Ошибка: ' + data.error, 'danger');
                     }
@@ -495,7 +491,6 @@
         );
     }
 
-    // Исключение участника
     async function removeMember(userId) {
         showConfirm(
             'Вы уверены, что хотите исключить участника из семьи?',
@@ -512,7 +507,7 @@
 
                     if (data.success) {
                         showFlash('Участник исключён из семьи', 'success');
-                        await loadFamilyData(); // Обновляем таблицу участников
+                        await loadFamilyData();
                     } else {
                         showFlash('Ошибка: ' + data.error, 'danger');
                     }
@@ -523,7 +518,6 @@
         );
     }
 
-    // Выход из семьи
     async function leaveFamily() {
         showConfirm(
             'Вы уверены, что хотите покинуть семью?',
@@ -556,7 +550,6 @@
         );
     }
 
-    // Удаление семьи
     function deleteFamily() {
         const confirmInput = document.getElementById('deleteFamilyConfirmInput');
         const errorDiv = document.getElementById('deleteFamilyError');
@@ -634,17 +627,14 @@
         }
     }
 
-    // Назначение обработчиков событий
     document.addEventListener('DOMContentLoaded', function() {
         loadFamilyData();
 
         document.getElementById('renameFamilyBtn').addEventListener('click', openRenameFamilyModal);
-        document.getElementById('confirmRenameFamilyBtn').addEventListener('click', confirmRenameFamily);
         document.getElementById('generateInviteBtn').addEventListener('click', generateInvite);
         document.getElementById('deleteFamilyBtn').addEventListener('click', deleteFamily);
         document.getElementById('deleteFamilyConfirmBtn').addEventListener('click', confirmDeleteFamily);
 
-        // Enter в поле подтверждения удаления
         const confirmInput = document.getElementById('deleteFamilyConfirmInput');
         if (confirmInput) {
             confirmInput.addEventListener('keypress', function(e) {
@@ -655,7 +645,6 @@
             });
         }
 
-        // Enter в поле переименования
         const renameInput = document.getElementById('rename_family_name');
         if (renameInput) {
             renameInput.addEventListener('keypress', function(e) {

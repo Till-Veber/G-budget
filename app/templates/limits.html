@@ -22,7 +22,7 @@
                         </tr>
                     </thead>
                     <tbody id="personalLimitsBody">
-                        <tr><td colspan="5" class="text-center text-secondary">Загрузка...</td></tr>
+                        <tr><td colspan="5" class="text-center text-secondary">Загрузка...</td</tr>
                     </tbody>
                 </table>
             </div>
@@ -51,7 +51,7 @@
                         </tr>
                     </thead>
                     <tbody id="familyLimitsBody">
-                        <tr><td colspan="5" class="text-center text-secondary">Загрузка...</td></tr>
+                        <tr><td colspan="5" class="text-center text-secondary">Загрузка...</td</tr>
                     </tbody>
                 </table>
             </div>
@@ -71,7 +71,7 @@
             <button class="modal-close" onclick="closeLimitEditModal()">&times;</button>
         </div>
         <div class="modal-body">
-            <form id="limitEditForm">
+            <form id="limitEditForm" onsubmit="event.preventDefault(); saveLimitEdit();">
                 <div class="form-group">
                     <label for="edit_limit_category_id">Категория</label>
                     <select id="edit_limit_category_id" required>
@@ -83,11 +83,11 @@
                     <input type="number" id="edit_limit_amount" step="0.01" min="0" required>
                 </div>
                 <div id="limitEditError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
+                <div class="modal-footer" style="padding-top: 0; border-top: none; margin-top: 16px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeLimitEditModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="saveLimitBtn">Сохранить</button>
+                </div>
             </form>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeLimitEditModal()">Отмена</button>
-            <button class="btn btn-primary" id="saveLimitBtn">Сохранить</button>
         </div>
     </div>
 </div>
@@ -98,7 +98,6 @@
     let hierarchicalCategories = [];
     let isAdmin = false;
 
-    // Функция для рендеринга иерархических опций
     function renderHierarchicalOptions(selectElement, selectedId = null) {
         if (!selectElement) return;
 
@@ -109,7 +108,6 @@
             option.value = cat.id;
             option.style.color = cat.color;
 
-            // Создаём отступы для вложенности
             let indent = '';
             for (let i = 0; i < cat.level; i++) {
                 indent += '&nbsp;&nbsp;&nbsp;&nbsp;';
@@ -126,7 +124,6 @@
         });
     }
 
-    // Загрузка данных лимитов
     async function loadLimits() {
         try {
             const response = await fetch('/api/limits-full');
@@ -136,13 +133,11 @@
                 hierarchicalCategories = data.hierarchical_categories || [];
                 isAdmin = data.is_admin;
 
-                // Показываем/скрываем карточку семейных лимитов
                 const familyCard = document.getElementById('familyLimitsCard');
                 if (familyCard) {
                     familyCard.style.display = isAdmin ? 'block' : 'none';
                 }
 
-                // Обновляем таблицы
                 renderPersonalLimits(data.personal_limits);
                 if (isAdmin) {
                     renderFamilyLimits(data.family_limits);
@@ -160,7 +155,7 @@
         const tbody = document.getElementById('personalLimitsBody');
 
         if (!limits || limits.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет личных лимитов</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет личных лимитов</td</tr>';
             return;
         }
 
@@ -203,7 +198,7 @@
         const tbody = document.getElementById('familyLimitsBody');
 
         if (!limits || limits.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет семейных лимитов</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">Нет семейных лимитов</td</tr>';
             return;
         }
 
@@ -248,6 +243,14 @@
         return div.innerHTML;
     }
 
+    function resetSaveButton() {
+        const saveBtn = document.getElementById('saveLimitBtn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Сохранить';
+        }
+    }
+
     function openLimitModal(type) {
         currentLimitType = type;
         currentEditCategoryId = null;
@@ -258,8 +261,13 @@
 
         document.getElementById('edit_limit_amount').value = '';
         document.getElementById('limitEditError').style.display = 'none';
+        resetSaveButton();
         document.getElementById('limitEditModal').classList.add('active');
         document.body.style.overflow = 'hidden';
+
+        setTimeout(() => {
+            document.getElementById('edit_limit_amount').focus();
+        }, 100);
     }
 
     function editLimit(type, categoryId, currentAmount) {
@@ -272,8 +280,13 @@
 
         document.getElementById('edit_limit_amount').value = currentAmount;
         document.getElementById('limitEditError').style.display = 'none';
+        resetSaveButton();
         document.getElementById('limitEditModal').classList.add('active');
         document.body.style.overflow = 'hidden';
+
+        setTimeout(() => {
+            document.getElementById('edit_limit_amount').focus();
+        }, 100);
     }
 
     function closeLimitEditModal() {
@@ -281,6 +294,8 @@
         document.body.style.overflow = '';
         currentLimitType = null;
         currentEditCategoryId = null;
+        resetSaveButton();
+        document.getElementById('limitEditError').style.display = 'none';
     }
 
     function closeLimitEditModalOnOverlay(event) {
@@ -321,15 +336,16 @@
             if (data.success) {
                 showFlash('Лимит сохранён', 'success');
                 closeLimitEditModal();
-                await loadLimits(); // Обновляем данные без перезагрузки
+                await loadLimits();
             } else {
                 errorDiv.textContent = data.error || 'Ошибка при сохранении';
                 errorDiv.style.display = 'block';
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить';
             }
         } catch (err) {
             errorDiv.textContent = 'Ошибка соединения с сервером';
             errorDiv.style.display = 'block';
-        } finally {
             saveBtn.disabled = false;
             saveBtn.textContent = 'Сохранить';
         }
@@ -354,7 +370,7 @@
 
                     if (data.success) {
                         showFlash('Лимит удалён', 'success');
-                        await loadLimits(); // Обновляем данные без перезагрузки
+                        await loadLimits();
                     } else {
                         showFlash('Ошибка: ' + data.error, 'danger');
                     }
@@ -365,16 +381,14 @@
         );
     }
 
-    // Обработчик для кнопки сохранения
-    document.getElementById('saveLimitBtn').addEventListener('click', saveLimitEdit);
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeLimitEditModal();
-    });
-
-    // Инициализация
     document.addEventListener('DOMContentLoaded', function() {
         loadLimits();
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeLimitEditModal();
+            }
+        });
     });
 </script>
 {% endblock %}

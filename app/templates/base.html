@@ -60,7 +60,6 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Модальные окна и скрипты -->
     <div class="modal-overlay" id="confirmModal" onclick="closeConfirmModalOnOverlay(event)">
         <div class="modal" style="max-width: 400px;">
             <div class="modal-header">
@@ -130,16 +129,37 @@
                 <button class="modal-close" onclick="closeRenameModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <form id="renameCategoryForm">
+                <form id="renameCategoryForm" onsubmit="event.preventDefault(); confirmRename();">
                     <div class="form-group">
                         <label for="rename_category_name">Новое название</label>
                         <input type="text" id="rename_category_name" required>
                     </div>
+                    <div class="modal-footer" style="padding-top: 0; border-top: none; margin-top: 16px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
-                <button class="btn btn-primary" onclick="confirmRename()">Сохранить</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="renameCategoryModal" onclick="closeRenameModalOnOverlay(event)">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Переименование категории</h3>
+                <button class="modal-close" onclick="closeRenameModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="renameCategoryForm" onsubmit="event.preventDefault(); confirmRename();">
+                    <div class="form-group">
+                        <label for="rename_category_name">Новое название</label>
+                        <input type="text" id="rename_category_name" required>
+                    </div>
+                    <div class="modal-footer" style="padding-top: 0; border-top: none; margin-top: 16px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -434,6 +454,11 @@
             confirmCallback = onConfirm;
             document.getElementById('confirmModal').classList.add('active');
             document.body.style.overflow = 'hidden';
+
+            setTimeout(() => {
+                const confirmBtn = document.getElementById('confirmBtn');
+                if (confirmBtn) confirmBtn.focus();
+            }, 100);
         };
 
         window.closeConfirmModal = function() {
@@ -452,7 +477,31 @@
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeConfirmModal();
+            if (e.key === 'Escape') {
+                closeConfirmModal();
+                closeColorPicker();
+                closeRenameModal();
+                closeDeleteCategoryModal();
+            }
+
+            // Enter для confirmModal
+            if (e.key === 'Enter') {
+                const confirmModal = document.getElementById('confirmModal');
+                if (confirmModal && confirmModal.classList.contains('active')) {
+                    e.preventDefault();
+                    if (confirmCallback) confirmCallback();
+                    closeConfirmModal();
+                }
+            }
+
+            // Enter для colorPickerModal
+            if (e.key === 'Enter') {
+                const colorPickerModal = document.getElementById('colorPickerModal');
+                if (colorPickerModal && colorPickerModal.classList.contains('active')) {
+                    e.preventDefault();
+                    confirmColor();
+                }
+            }
         });
 
         // Rename Category Modal Logic
@@ -465,6 +514,10 @@
             document.getElementById('rename_category_name').value = currentName;
             document.getElementById('renameCategoryModal').classList.add('active');
             document.body.style.overflow = 'hidden';
+
+            setTimeout(() => {
+                document.getElementById('rename_category_name').focus();
+            }, 100);
         };
 
         window.closeRenameModal = function() {
@@ -507,6 +560,11 @@
 
             document.getElementById('deleteCategoryModal').classList.add('active');
             document.body.style.overflow = 'hidden';
+
+            setTimeout(() => {
+                const confirmBtn = document.getElementById('deleteCategoryConfirmBtn');
+                if (confirmBtn) confirmBtn.focus();
+            }, 100);
         };
 
         window.closeDeleteCategoryModal = function() {
@@ -526,6 +584,20 @@
                 deleteCategoryCallback(deleteCategoryId, action);
             }
             closeDeleteCategoryModal();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const deleteModal = document.getElementById('deleteCategoryModal');
+                if (deleteModal && deleteModal.classList.contains('active')) {
+                    e.preventDefault();
+                    if (deleteCategoryCallback) {
+                        const action = document.getElementById('deleteCategoryAction').value;
+                        deleteCategoryCallback(deleteCategoryId, action);
+                    }
+                    closeDeleteCategoryModal();
+                }
+            }
         });
 
         // Color Picker Logic
@@ -770,8 +842,7 @@
 
         document.addEventListener('DOMContentLoaded', () => ColorPicker.init());
 
-
-         // Fix for CSV export - prevent particle animation freeze
+        // Fix for CSV export - prevent particle animation freeze
         let exportInProgress = false;
 
         window.addEventListener('beforeunload', () => {

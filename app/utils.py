@@ -180,12 +180,10 @@ def build_category_tree(categories, parent_id=None, level=0):
     for cat in categories:
         if cat.parent_id == parent_id:
             # Создаем отступ из символов неразрывного пробела (&nbsp;) или дефисов
-            indent = '— ' * level if level > 0 else ''
-            display_name = f"{indent}{cat.name}"
 
             result.append({
                 'id': cat.id,
-                'name': display_name,
+                'name': cat.name,
                 'type': cat.type,
                 'color': cat.color,
                 'level': level

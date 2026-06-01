@@ -10,6 +10,101 @@
             <a href="{{ url_for('main.add_transaction') }}" class="btn btn-primary">+ Добавить операцию</a>
         </div>
 
+        <!-- Блок фильтрации -->
+        <div class="filters-section mb-4">
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label>Тип</label>
+                    <select id="filterType" class="filter-select">
+                        <option value="">Все типы</option>
+                        <option value="Доход">Доходы</option>
+                        <option value="Расход">Расходы</option>
+                    </select>
+                </div>
+
+                <div class="filter-group filter-categories-group">
+                    <label>Категории</label>
+                    <div class="multiselect" id="categoriesMultiselect">
+                        <div class="multiselect-trigger" onclick="toggleCategoriesDropdown()">
+                            <span class="multiselect-placeholder">Выберите категории</span>
+                            <span class="multiselect-arrow">▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="categoriesDropdown" style="display: none;">
+                            <div class="multiselect-search">
+                                <input type="text" id="categorySearch" placeholder="Поиск категории...">
+                            </div>
+                            <div class="multiselect-options" id="categoriesOptions"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-group filter-users-group">
+                    <label>Пользователи</label>
+                    <div class="multiselect" id="usersMultiselect">
+                        <div class="multiselect-trigger" onclick="toggleUsersDropdown()">
+                            <span class="multiselect-placeholder">Выберите пользователей</span>
+                            <span class="multiselect-arrow">▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="usersDropdown" style="display: none;">
+                            <div class="multiselect-search">
+                                <input type="text" id="userSearch" placeholder="Поиск пользователя...">
+                            </div>
+                            <div class="multiselect-options" id="usersOptions"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filters-row filters-range">
+                <div class="filter-group">
+                    <label>Сумма от</label>
+                    <input type="number" id="amountFrom" class="filter-input" step="0.01" placeholder="0.00">
+                </div>
+                <div class="filter-group">
+                    <label>Сумма до</label>
+                    <input type="number" id="amountTo" class="filter-input" step="0.01" placeholder="0.00">
+                </div>
+                <div class="filter-group">
+                    <label>Дата от</label>
+                    <input type="date" id="dateFrom" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Дата до</label>
+                    <input type="date" id="dateTo" class="filter-input">
+                </div>
+            </div>
+
+            <div class="filters-row filters-extra">
+                <div class="filter-group filter-search">
+                    <label>Поиск в комментариях</label>
+                    <input type="text" id="commentSearch" class="filter-input" placeholder="Введите текст...">
+                </div>
+                <div class="filter-group filter-sort">
+                    <label>Сортировать по</label>
+                    <select id="sortBy" class="filter-select">
+                        <option value="date">Дате</option>
+                        <option value="amount">Сумме</option>
+                    </select>
+                </div>
+                <div class="filter-group filter-order">
+                    <label>Порядок</label>
+                    <select id="sortOrder" class="filter-select">
+                        <option value="desc">По убыванию ↓</option>
+                        <option value="asc">По возрастанию ↑</option>
+                    </select>
+                </div>
+                <div class="filter-group filter-export">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-primary btn-sm" onclick="exportCSV()">Экспорт CSV</button>
+                </div>
+            </div>
+
+            <div class="filters-actions">
+                <button class="btn btn-primary btn-sm" onclick="applyFilters()">Применить фильтры</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetFilters()">Очистить фильтры</button>
+            </div>
+        </div>
+
         <div class="table-container">
             <div class="table-wrapper">
                 <table id="transactionsTable">
@@ -33,17 +128,17 @@
             </div>
         </div>
 
-        <!-- Пагинация -->
         <div class="pagination-container" id="paginationContainer" style="display: none; margin-top: 24px; justify-content: center;">
             <div class="pagination">
-                <button class="pagination-btn" id="prevPageBtn" onclick="loadTransactions(currentPage - 1)" disabled>← Назад</button>
+                <button class="pagination-btn" id="prevPageBtn" disabled>← Назад</button>
                 <span class="pagination-info" id="paginationInfo">Страница 1 из 1</span>
-                <button class="pagination-btn" id="nextPageBtn" onclick="loadTransactions(currentPage + 1)" disabled>Вперед →</button>
+                <button class="pagination-btn" id="nextPageBtn" disabled>Вперед →</button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Модальное окно редактирования -->
 <div class="modal-overlay" id="editTransactionModal" onclick="closeEditModalOnOverlay(event)">
     <div class="modal">
         <div class="modal-header">
@@ -94,8 +189,180 @@
 <script>
     let editingTransactionId = null;
     let categoriesData = [];
+    let usersData = [];
+    let hierarchicalCategories = [];
     let currentPage = 1;
     let totalPages = 1;
+
+    let currentFilters = {
+        type: '',
+        category_ids: [],
+        user_ids: [],
+        date_from: '',
+        date_to: '',
+        amount_from: '',
+        amount_to: '',
+        comment_search: '',
+        sort_by: 'date',
+        sort_order: 'desc'
+    };
+
+    function toggleCategoriesDropdown() {
+        const dropdown = document.getElementById('categoriesDropdown');
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function toggleUsersDropdown() {
+        const dropdown = document.getElementById('usersDropdown');
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function renderHierarchicalCategories(container, categories, level = 0, selectedIds = []) {
+        categories.forEach(cat => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'multiselect-option';
+            optionDiv.style.paddingLeft = `${20 + level * 20}px`;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = cat.id;
+            checkbox.id = `cat_${cat.id}`;
+            checkbox.checked = selectedIds.includes(cat.id);
+            checkbox.addEventListener('change', () => updateCategorySelection());
+
+            const label = document.createElement('label');
+            label.htmlFor = `cat_${cat.id}`;
+            label.style.color = cat.color;
+            label.textContent = cat.name;
+
+            optionDiv.appendChild(checkbox);
+            optionDiv.appendChild(label);
+            container.appendChild(optionDiv);
+
+            if (cat.children && cat.children.length) {
+                renderHierarchicalCategories(container, cat.children, level + 1, selectedIds);
+            }
+        });
+    }
+
+    function renderUsersList(users, selectedIds = []) {
+        const container = document.getElementById('usersOptions');
+        container.innerHTML = '';
+
+        users.forEach(user => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'multiselect-option';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = user.id;
+            checkbox.id = `user_${user.id}`;
+            checkbox.checked = selectedIds.includes(user.id);
+            checkbox.addEventListener('change', () => updateUserSelection());
+
+            const label = document.createElement('label');
+            label.htmlFor = `user_${user.id}`;
+            label.textContent = user.name;
+
+            optionDiv.appendChild(checkbox);
+            optionDiv.appendChild(label);
+            container.appendChild(optionDiv);
+        });
+    }
+
+    function updateCategorySelection() {
+        const checkboxes = document.querySelectorAll('#categoriesOptions input[type="checkbox"]');
+        currentFilters.category_ids = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => parseInt(cb.value));
+
+        const selectedCount = currentFilters.category_ids.length;
+        const placeholder = document.querySelector('#categoriesMultiselect .multiselect-placeholder');
+        if (selectedCount === 0) {
+            placeholder.textContent = 'Выберите категории';
+        } else if (selectedCount === 1) {
+            let selectedName = '';
+            function findName(node) {
+                if (node.id === currentFilters.category_ids[0]) selectedName = node.name;
+                if (node.children) node.children.forEach(findName);
+            }
+            hierarchicalCategories.forEach(findName);
+            placeholder.textContent = selectedName || `1 категория`;
+        } else {
+            placeholder.textContent = `Выбрано: ${selectedCount}`;
+        }
+    }
+
+    function updateUserSelection() {
+        const checkboxes = document.querySelectorAll('#usersOptions input[type="checkbox"]');
+        currentFilters.user_ids = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => parseInt(cb.value));
+
+        const selectedCount = currentFilters.user_ids.length;
+        const placeholder = document.querySelector('#usersMultiselect .multiselect-placeholder');
+        if (selectedCount === 0) {
+            placeholder.textContent = 'Выберите пользователей';
+        } else if (selectedCount === 1) {
+            const selectedUser = usersData.find(u => u.id === currentFilters.user_ids[0]);
+            placeholder.textContent = selectedUser ? selectedUser.name : `1 пользователь`;
+        } else {
+            placeholder.textContent = `Выбрано: ${selectedCount}`;
+        }
+    }
+
+    function searchCategories() {
+        const searchTerm = document.getElementById('categorySearch').value.toLowerCase();
+        const options = document.querySelectorAll('#categoriesOptions .multiselect-option');
+        options.forEach(option => {
+            const label = option.querySelector('label');
+            if (label && label.textContent.toLowerCase().includes(searchTerm)) {
+                option.style.display = 'flex';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    }
+
+    function searchUsers() {
+        const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+        const options = document.querySelectorAll('#usersOptions .multiselect-option');
+        options.forEach(option => {
+            const label = option.querySelector('label');
+            if (label && label.textContent.toLowerCase().includes(searchTerm)) {
+                option.style.display = 'flex';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    }
+
+    async function loadCategoriesAndUsers() {
+        try {
+            const catResponse = await fetch('/api/categories-tree');
+            const catData = await catResponse.json();
+            if (catData.success) {
+                hierarchicalCategories = catData.tree;
+                const container = document.getElementById('categoriesOptions');
+                container.innerHTML = '';
+                renderHierarchicalCategories(container, hierarchicalCategories, 0, currentFilters.category_ids);
+                document.getElementById('categorySearch').addEventListener('input', searchCategories);
+            }
+
+            const familyResponse = await fetch('/api/family-data');
+            const familyData = await familyResponse.json();
+            if (familyData.success) {
+                usersData = familyData.members.map(m => ({
+                    id: m.id,
+                    name: m.full_name
+                }));
+                renderUsersList(usersData, currentFilters.user_ids);
+                document.getElementById('userSearch').addEventListener('input', searchUsers);
+            }
+        } catch (err) {
+            console.error('Error loading categories/users:', err);
+        }
+    }
 
     async function loadTransactions(page = 1) {
         const tbody = document.getElementById('transactionsTableBody');
@@ -103,8 +370,23 @@
 
         currentPage = page;
 
+        const params = new URLSearchParams();
+        params.append('page', page);
+        params.append('per_page', 50);
+
+        if (currentFilters.type) params.append('type', currentFilters.type);
+        if (currentFilters.category_ids.length) params.append('category_ids', currentFilters.category_ids.join(','));
+        if (currentFilters.user_ids.length) params.append('user_ids', currentFilters.user_ids.join(','));
+        if (currentFilters.date_from) params.append('date_from', currentFilters.date_from);
+        if (currentFilters.date_to) params.append('date_to', currentFilters.date_to);
+        if (currentFilters.amount_from) params.append('amount_from', currentFilters.amount_from);
+        if (currentFilters.amount_to) params.append('amount_to', currentFilters.amount_to);
+        if (currentFilters.comment_search) params.append('comment_search', currentFilters.comment_search);
+        params.append('sort_by', currentFilters.sort_by);
+        params.append('sort_order', currentFilters.sort_order);
+
         try {
-            const response = await fetch(`/api/transactions?page=${page}&per_page=50`);
+            const response = await fetch(`/api/transactions?${params.toString()}`);
             const data = await response.json();
 
             if (data.success && data.transactions) {
@@ -116,23 +398,20 @@
                     return;
                 }
 
-                // Обновляем пагинацию
                 const pagination = data.pagination;
                 totalPages = pagination.pages;
                 updatePaginationUI(pagination);
 
                 tbody.innerHTML = data.transactions.map(txn => `
-                    <tr data-id="${txn.id}" class="transaction-row">
+                    <tr data-id="${txn.id}">
                         <td class="date-cell">${txn.date}</td>
                         <td class="time-cell">${txn.time}</td>
                         <td>${escapeHtml(txn.author)}</td>
-                        <td class="category-cell" data-category-id="${txn.category_id}" data-category-color="${txn.category_color}" style="color: ${txn.category_color}; font-weight: 500;">
-                            ${escapeHtml(txn.category_name)}
-                        </td>
-                        <td class="amount-cell" style="color: ${txn.category_type === 'Расход' ? 'var(--error)' : 'var(--success)'}; font-weight: 600;">
+                        <td style="color: ${txn.category_color}; font-weight: 500;">${escapeHtml(txn.category_name)}</td>
+                        <td style="color: ${txn.category_type === 'Расход' ? 'var(--error)' : 'var(--success)'}; font-weight: 600;">
                             ${txn.category_type === 'Расход' ? '-' : '+'} ${txn.amount.toFixed(2)}
                         </td>
-                        <td class="comment-cell">${escapeHtml(txn.comment)}</td>
+                        <td>${escapeHtml(txn.comment)}</td>
                         <td class="actions-cell">
                             <button class="edit-txn-btn" onclick="editTransaction(${txn.id})" title="Редактировать">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -170,15 +449,93 @@
         const infoSpan = document.getElementById('paginationInfo');
 
         container.style.display = 'flex';
-
         infoSpan.textContent = `Страница ${pagination.page} из ${pagination.pages} (всего ${pagination.total} записей)`;
 
-        if (prevBtn) {
-            prevBtn.disabled = !pagination.has_prev;
-        }
-        if (nextBtn) {
-            nextBtn.disabled = !pagination.has_next;
-        }
+        prevBtn.disabled = !pagination.has_prev;
+        prevBtn.onclick = () => { if (pagination.has_prev) loadTransactions(currentPage - 1); };
+
+        nextBtn.disabled = !pagination.has_next;
+        nextBtn.onclick = () => { if (pagination.has_next) loadTransactions(currentPage + 1); };
+    }
+
+    function applyFilters() {
+        currentFilters.type = document.getElementById('filterType').value;
+        currentFilters.date_from = document.getElementById('dateFrom').value;
+        currentFilters.date_to = document.getElementById('dateTo').value;
+        currentFilters.amount_from = document.getElementById('amountFrom').value;
+        currentFilters.amount_to = document.getElementById('amountTo').value;
+        currentFilters.comment_search = document.getElementById('commentSearch').value;
+        currentFilters.sort_by = document.getElementById('sortBy').value;
+        currentFilters.sort_order = document.getElementById('sortOrder').value;
+
+        loadTransactions(1);
+        document.getElementById('categoriesDropdown').style.display = 'none';
+        document.getElementById('usersDropdown').style.display = 'none';
+    }
+
+    function resetFilters() {
+        document.getElementById('filterType').value = '';
+        document.getElementById('dateFrom').value = '';
+        document.getElementById('dateTo').value = '';
+        document.getElementById('amountFrom').value = '';
+        document.getElementById('amountTo').value = '';
+        document.getElementById('commentSearch').value = '';
+        document.getElementById('sortBy').value = 'date';
+        document.getElementById('sortOrder').value = 'desc';
+
+        document.querySelectorAll('#categoriesOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+        document.querySelectorAll('#usersOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+        currentFilters = {
+            type: '',
+            category_ids: [],
+            user_ids: [],
+            date_from: '',
+            date_to: '',
+            amount_from: '',
+            amount_to: '',
+            comment_search: '',
+            sort_by: 'date',
+            sort_order: 'desc'
+        };
+
+        updateCategorySelection();
+        updateUserSelection();
+        loadTransactions(1);
+
+        document.getElementById('categoriesDropdown').style.display = 'none';
+        document.getElementById('usersDropdown').style.display = 'none';
+    }
+
+    function exportCSV() {
+        const params = new URLSearchParams();
+
+        if (currentFilters.type) params.append('type', currentFilters.type);
+        if (currentFilters.category_ids.length) params.append('category_ids', currentFilters.category_ids.join(','));
+        if (currentFilters.user_ids.length) params.append('user_ids', currentFilters.user_ids.join(','));
+        if (currentFilters.date_from) params.append('date_from', currentFilters.date_from);
+        if (currentFilters.date_to) params.append('date_to', currentFilters.date_to);
+        if (currentFilters.amount_from) params.append('amount_from', currentFilters.amount_from);
+        if (currentFilters.amount_to) params.append('amount_to', currentFilters.amount_to);
+        if (currentFilters.comment_search) params.append('comment_search', currentFilters.comment_search);
+        params.append('sort_by', currentFilters.sort_by);
+        params.append('sort_order', currentFilters.sort_order);
+
+        const url = `/api/transactions-export?${params.toString()}`;
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => {
+            const canvas = document.getElementById('particles-canvas');
+            if (canvas) {
+                const event = new Event('resize');
+                window.dispatchEvent(event);
+            }
+        }, 100);
     }
 
     function escapeHtml(text) {
@@ -190,17 +547,13 @@
     function updateCategoriesSelect(selectedId = null) {
         const select = document.getElementById('edit_category_id');
         if (!select) return;
-
         select.innerHTML = '<option value="">Выберите категорию</option>';
-
         categoriesData.forEach(cat => {
             const option = document.createElement('option');
             option.value = cat.id;
             option.textContent = `${cat.name} (${cat.type})`;
             option.style.color = cat.color;
-            if (selectedId && selectedId == cat.id) {
-                option.selected = true;
-            }
+            if (selectedId && selectedId == cat.id) option.selected = true;
             select.appendChild(option);
         });
     }
@@ -210,28 +563,24 @@
         const row = document.querySelector(`tr[data-id="${id}"]`);
         if (!row) return;
 
-        const categoryId = row.querySelector('.category-cell').dataset.categoryId;
-        const amountText = row.querySelector('.amount-cell').innerText;
+        const categoryId = row.cells[3].style?.color ?
+            (() => { const el = row.cells[3]; return el.dataset?.categoryId || categoriesData.find(c => c.name === el.innerText)?.id; })() :
+            categoriesData.find(c => c.name === row.cells[3].innerText)?.id;
+        const amountText = row.cells[4].innerText;
         const amount = amountText.replace(/[+-]/g, '').trim();
-        const date = row.querySelector('.date-cell').innerText.split('.').reverse().join('-');
-        const time = row.querySelector('.time-cell').innerText;
-        const comment = row.querySelector('.comment-cell').innerText;
+        const date = row.cells[0].innerText.split('.').reverse().join('-');
+        const time = row.cells[1].innerText;
+        const comment = row.cells[5].innerText;
 
         updateCategoriesSelect(parseInt(categoryId));
-
         document.getElementById('edit_amount').value = amount;
         document.getElementById('edit_date').value = date;
         document.getElementById('edit_time').value = time !== '—' ? time : '12:00';
         document.getElementById('edit_comment').value = comment !== '—' ? comment : '';
-
         document.getElementById('editError').style.display = 'none';
-
         document.getElementById('editTransactionModal').classList.add('active');
         document.body.style.overflow = 'hidden';
-
-        setTimeout(() => {
-            document.getElementById('edit_amount').focus();
-        }, 100);
+        setTimeout(() => document.getElementById('edit_amount').focus(), 100);
     }
 
     function closeEditModal() {
@@ -242,9 +591,7 @@
     }
 
     function closeEditModalOnOverlay(event) {
-        if (event.target === event.currentTarget) {
-            closeEditModal();
-        }
+        if (event.target === event.currentTarget) closeEditModal();
     }
 
     async function saveTransactionEdit() {
@@ -282,7 +629,6 @@
             });
 
             const data = await response.json();
-
             if (data.success) {
                 showFlash('Транзакция обновлена', 'success');
                 closeEditModal();
@@ -306,37 +652,41 @@
     }
 
     function deleteTransaction(id) {
-        showConfirm(
-            'Удалить транзакцию? Это действие нельзя отменить.',
-            'Удаление транзакции',
-            async function() {
-                try {
-                    const response = await fetch(`/transaction/${id}`, {
-                        method: 'DELETE',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        showFlash('Транзакция удалена', 'success');
-                        await loadTransactions(currentPage);
-                    } else {
-                        showFlash('Ошибка: ' + data.error, 'danger');
-                    }
-                } catch (err) {
-                    showFlash('Ошибка соединения с сервером', 'danger');
+        showConfirm('Удалить транзакцию? Это действие нельзя отменить.', 'Удаление транзакции', async () => {
+            try {
+                const response = await fetch(`/transaction/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
+                const data = await response.json();
+                if (data.success) {
+                    showFlash('Транзакция удалена', 'success');
+                    await loadTransactions(currentPage);
+                } else {
+                    showFlash('Ошибка: ' + data.error, 'danger');
                 }
+            } catch (err) {
+                showFlash('Ошибка соединения с сервером', 'danger');
             }
-        );
+        });
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-        loadTransactions(1);
+    document.addEventListener('click', function(e) {
+        const categoriesMultiselect = document.getElementById('categoriesMultiselect');
+        const usersMultiselect = document.getElementById('usersMultiselect');
+        if (categoriesMultiselect && !categoriesMultiselect.contains(e.target)) {
+            document.getElementById('categoriesDropdown').style.display = 'none';
+        }
+        if (usersMultiselect && !usersMultiselect.contains(e.target)) {
+            document.getElementById('usersDropdown').style.display = 'none';
+        }
+    });
 
+    document.addEventListener('DOMContentLoaded', function() {
+        loadCategoriesAndUsers();
+        loadTransactions(1);
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeEditModal();
+                document.getElementById('categoriesDropdown').style.display = 'none';
+                document.getElementById('usersDropdown').style.display = 'none';
             }
         });
     });

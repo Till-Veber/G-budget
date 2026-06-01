@@ -1096,12 +1096,81 @@ def api_transactions():
     # Параметры пагинации
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
-    per_page = min(per_page, 100)  # Ограничиваем максимум 100 записей на страницу
+    per_page = min(per_page, 100)
+
+    # Параметры фильтрации
+    transaction_type = request.args.get('type')
+    category_ids_str = request.args.get('category_ids')
+    user_ids_str = request.args.get('user_ids')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    amount_from = request.args.get('amount_from')
+    amount_to = request.args.get('amount_to')
+    comment_search = request.args.get('comment_search')
+
+    # Параметры сортировки
+    sort_by = request.args.get('sort_by', 'date')
+    sort_order = request.args.get('sort_order', 'desc')
 
     # Базовый запрос
     query = Transaction.query.join(User).filter(
         User.family_id == current_user.family_id
-    ).order_by(Transaction.date.desc(), Transaction.time.desc())
+    )
+
+    # Фильтр по типу (через категорию)
+    if transaction_type:
+        query = query.join(Category).filter(Category.type == transaction_type)
+
+    # Фильтр по категориям
+    if category_ids_str:
+        category_ids = [int(x) for x in category_ids_str.split(',') if x]
+        if category_ids:
+            all_category_ids = set(category_ids)
+            for cat_id in category_ids:
+                category = Category.query.get(cat_id)
+                if category:
+                    def add_children(cat):
+                        for child in cat.children:
+                            all_category_ids.add(child.id)
+                            add_children(child)
+
+                    add_children(category)
+            query = query.filter(Transaction.category_id.in_(all_category_ids))
+
+    # Фильтр по пользователям
+    if user_ids_str:
+        user_ids = [int(x) for x in user_ids_str.split(',') if x]
+        if user_ids:
+            query = query.filter(Transaction.user_id.in_(user_ids))
+
+    # Фильтр по дате
+    if date_from:
+        query = query.filter(Transaction.date >= datetime.strptime(date_from, '%Y-%m-%d').date())
+    if date_to:
+        query = query.filter(Transaction.date <= datetime.strptime(date_to, '%Y-%m-%d').date())
+
+    # Фильтр по сумме
+    if amount_from:
+        query = query.filter(Transaction.amount >= Decimal(str(amount_from)))
+    if amount_to:
+        query = query.filter(Transaction.amount <= Decimal(str(amount_to)))
+
+    # Фильтр по комментарию (поиск подстроки)
+    if comment_search:
+        query = query.filter(Transaction.comment.ilike(f'%{comment_search}%'))
+
+    # Сортировка
+    if sort_by == 'date':
+        order_col = Transaction.date
+    elif sort_by == 'amount':
+        order_col = Transaction.amount
+    else:
+        order_col = Transaction.date
+
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc(), Transaction.time.asc())
+    else:
+        query = query.order_by(order_col.desc(), Transaction.time.desc())
 
     # Пагинация
     paginated = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -1138,6 +1207,126 @@ def api_transactions():
             'has_next': paginated.has_next
         }
     })
+
+
+@main_bp.route('/api/transactions-export')
+@login_required
+def api_transactions_export():
+    if not current_user.family_id:
+        return jsonify({'error': 'Семья не найдена'}), 400
+
+    # Параметры фильтрации
+    transaction_type = request.args.get('type')
+    category_ids_str = request.args.get('category_ids')
+    user_ids_str = request.args.get('user_ids')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    amount_from = request.args.get('amount_from')
+    amount_to = request.args.get('amount_to')
+    comment_search = request.args.get('comment_search')
+    sort_by = request.args.get('sort_by', 'date')
+    sort_order = request.args.get('sort_order', 'desc')
+
+    # Базовый запрос
+    query = Transaction.query.join(User).filter(
+        User.family_id == current_user.family_id
+    )
+
+    # Применяем фильтры (аналогично /api/transactions)
+    if transaction_type:
+        query = query.join(Category).filter(Category.type == transaction_type)
+
+    if category_ids_str:
+        category_ids = [int(x) for x in category_ids_str.split(',') if x]
+        if category_ids:
+            all_category_ids = set(category_ids)
+            for cat_id in category_ids:
+                category = Category.query.get(cat_id)
+                if category:
+                    def add_children(cat):
+                        for child in cat.children:
+                            all_category_ids.add(child.id)
+                            add_children(child)
+
+                    add_children(category)
+            query = query.filter(Transaction.category_id.in_(all_category_ids))
+
+    if user_ids_str:
+        user_ids = [int(x) for x in user_ids_str.split(',') if x]
+        if user_ids:
+            query = query.filter(Transaction.user_id.in_(user_ids))
+
+    if date_from:
+        query = query.filter(Transaction.date >= datetime.strptime(date_from, '%Y-%m-%d').date())
+    if date_to:
+        query = query.filter(Transaction.date <= datetime.strptime(date_to, '%Y-%m-%d').date())
+
+    if amount_from:
+        query = query.filter(Transaction.amount >= Decimal(str(amount_from)))
+    if amount_to:
+        query = query.filter(Transaction.amount <= Decimal(str(amount_to)))
+
+    if comment_search:
+        query = query.filter(Transaction.comment.ilike(f'%{comment_search}%'))
+
+    # Сортировка
+    if sort_by == 'date':
+        order_col = Transaction.date
+    elif sort_by == 'amount':
+        order_col = Transaction.amount
+    else:
+        order_col = Transaction.date
+
+    if sort_order == 'asc':
+        query = query.order_by(order_col.asc(), Transaction.time.asc())
+    else:
+        query = query.order_by(order_col.desc(), Transaction.time.desc())
+
+    transactions = query.all()
+
+    # Формируем CSV
+    output = StringIO()
+    writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(['Дата', 'Время', 'Автор', 'Категория', 'Тип', 'Сумма', 'Комментарий'])
+
+    total_income = 0
+    total_expense = 0
+
+    for txn in transactions:
+        amount = float(txn.amount)
+        if txn.category.type == 'Доход':
+            total_income += amount
+            amount_str = f'+{amount:.2f}'
+        else:
+            total_expense += amount
+            amount_str = f'-{amount:.2f}'
+
+        writer.writerow([
+            txn.date.strftime('%d.%m.%Y'),
+            txn.time.strftime('%H:%M') if txn.time else '',
+            f"{txn.author.surname} {txn.author.name}",
+            txn.category.name,
+            txn.category.type,
+            amount_str,
+            (txn.comment or '').replace(';', ',')
+        ])
+
+    balance = total_income - total_expense
+
+    writer.writerow([])
+    writer.writerow(['ИТОГО ДОХОДЫ:', '', '', '', '', f'{total_income:.2f}', ''])
+    writer.writerow(['ИТОГО РАСХОДЫ:', '', '', '', '', f'{total_expense:.2f}', ''])
+    writer.writerow(['БАЛАНС:', '', '', '', '', f'{balance:.2f}', ''])
+    writer.writerow(
+        [f'ПЕРИОД: {date_from if date_from else "все"} - {date_to if date_to else "все"}', '', '', '', '', '', ''])
+
+    content = output.getvalue().encode('windows-1251', errors='replace')
+
+    response = Response(content, mimetype='text/csv')
+    response.headers[
+        'Content-Disposition'] = f'attachment; filename=transactions_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    response.headers['Content-Type'] = 'text/csv; charset=windows-1251'
+    return response
 
 
 @main_bp.route('/transaction/<int:transaction_id>', methods=['DELETE'])

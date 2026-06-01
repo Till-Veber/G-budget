@@ -1,4 +1,9 @@
 from app import create_app
+import os
 
 app = create_app()
-app.run(debug=True)
+
+if __name__ == '__main__':
+    if not os.path.exists('instance'):
+        os.makedirs('instance')
+    app.run(debug=True)

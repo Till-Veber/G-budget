@@ -902,22 +902,31 @@ def delete_category(category_id):
     if category.is_protected:
         return jsonify({'error': 'Нельзя удалить системную категорию "Прочее"'}), 400
 
-    other_category = Category.query.filter_by(
-        family_id=current_user.family_id,
-        name='Прочее',
-        type='Расход'
-    ).first()
+    # Определяем целевую категорию для перенаправления транзакций
+    target_category = None
 
-    if not other_category:
-        other_category = Category(
+    # Если у удаляемой категории есть родитель, используем его
+    if category.parent_id:
+        target_category = Category.query.get(category.parent_id)
+    else:
+        # Для корневых категорий ищем "Прочее"
+        target_category = Category.query.filter_by(
             family_id=current_user.family_id,
             name='Прочее',
-            type='Расход',
-            color='#6c757d',
-            is_protected=True
-        )
-        db.session.add(other_category)
-        db.session.commit()
+            type='Расход'
+        ).first()
+
+        # Если "Прочее" не существует, создаём
+        if not target_category:
+            target_category = Category(
+                family_id=current_user.family_id,
+                name='Прочее',
+                type='Расход',
+                color='#6c757d',
+                is_protected=True
+            )
+            db.session.add(target_category)
+            db.session.commit()
 
     data = request.get_json()
     delete_action = data.get('action', 'delete_children') if data else 'delete_children'
@@ -930,8 +939,9 @@ def delete_category(category_id):
 
     all_category_ids = get_all_descendant_ids(category)
 
+    # Перенаправляем транзакции в целевую категорию
     Transaction.query.filter(Transaction.category_id.in_(all_category_ids)).update(
-        {Transaction.category_id: other_category.id},
+        {Transaction.category_id: target_category.id},
         synchronize_session=False
     )
 
@@ -941,7 +951,7 @@ def delete_category(category_id):
     if delete_action == 'delete_children':
         for cat_id in all_category_ids:
             cat = Category.query.get(cat_id)
-            if cat and cat.id != other_category.id:
+            if cat and cat.id != target_category.id:
                 db.session.delete(cat)
     else:
         for child in category.children:

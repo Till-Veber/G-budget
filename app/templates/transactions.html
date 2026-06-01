@@ -4,10 +4,58 @@
 
 {% block content %}
 <div class="grid-2 mb-4">
+    <!-- Блок добавления транзакции (как на дашборде) -->
+    <div class="card">
+        <h3 class="card-title">Добавить операцию</h3>
+        <form id="addTransactionForm">
+            <div class="form-group">
+                <label for="category_id">Категория</label>
+                <select id="category_id" name="category_id" required>
+                    <option value="">Выберите категорию</option>
+                    {% for cat in hierarchical_categories %}
+                    <option value="{{ cat.id }}" style="color: {{ cat.color }};">
+                        {% for i in range(cat.level) %}&nbsp;&nbsp;&nbsp;&nbsp;{% endfor %}
+                        {% if cat.level > 0 %}↳ {% endif %}{{ cat.name }} ({{ cat.type }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="amount">Сумма</label>
+                <div class="number-input-wrapper">
+                    <button type="button" class="btn-number" onclick="changeAmount(-10)">−</button>
+                    <input type="number" id="amount" name="amount" placeholder="0" step="0.01" min="0" value="0.00" required>
+                    <button type="button" class="btn-number" onclick="changeAmount(10)">+</button>
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <div class="form-group" style="flex: 1;">
+                    <label for="date">Дата</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="time">Время</label>
+                    <input type="time" id="time" name="time">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="comment">Комментарий</label>
+                <textarea id="comment" name="comment" placeholder="Описание операции..."></textarea>
+            </div>
+
+            <div id="transactionFormError" class="alert alert-danger" style="display: none; margin-bottom: 16px;"></div>
+
+            <button type="submit" class="btn btn-primary w-full">Сохранить транзакцию</button>
+        </form>
+    </div>
+
+    <!-- История операций -->
     <div class="card">
         <div class="flex justify-between items-center mb-4">
             <h3 class="card-title" style="margin: 0;">История операций</h3>
-            <a href="{{ url_for('main.add_transaction') }}" class="btn btn-primary">+ Добавить операцию</a>
         </div>
 
         <!-- Блок фильтрации -->
@@ -206,6 +254,37 @@
         sort_by: 'date',
         sort_order: 'desc'
     };
+
+    // Инициализация даты и времени
+    function initDateTime() {
+        const dateInput = document.getElementById('date');
+        const timeInput = document.getElementById('time');
+
+        if (dateInput && !dateInput.value) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${year}-${month}-${day}`;
+        }
+
+        if (timeInput && !timeInput.value) {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            timeInput.value = `${hours}:${minutes}`;
+        }
+    }
+
+    function changeAmount(delta) {
+        const input = document.getElementById('amount');
+        let currentVal = parseFloat(input.value) || 0;
+        let newVal = currentVal + delta;
+        if (newVal < 0) newVal = 0;
+        input.value = newVal.toFixed(2);
+        input.style.borderColor = 'var(--accent-primary)';
+        setTimeout(() => { input.style.borderColor = ''; }, 300);
+    }
 
     function toggleCategoriesDropdown() {
         const dropdown = document.getElementById('categoriesDropdown');
@@ -668,6 +747,59 @@
         });
     }
 
+    // Обработчик отправки формы транзакции (AJAX)
+    document.getElementById('addTransactionForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const errorDiv = document.getElementById('transactionFormError');
+        const originalBtnText = submitBtn.textContent;
+
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Сохранение...';
+
+        try {
+            const response = await fetch('/add-transaction', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (data.warning) {
+                    showFlash(data.warning, 'warning');
+                } else {
+                    showFlash('Транзакция успешно добавлена', 'success');
+                }
+
+                document.getElementById('category_id').value = '';
+                document.getElementById('amount').value = '0.00';
+                document.getElementById('comment').value = '';
+
+                initDateTime();
+
+                await loadTransactions(currentPage);
+            } else {
+                errorDiv.textContent = data.error || 'Ошибка при сохранении транзакции';
+                errorDiv.style.display = 'block';
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Ошибка соединения с сервером';
+            errorDiv.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
+    });
+
     document.addEventListener('click', function(e) {
         const categoriesMultiselect = document.getElementById('categoriesMultiselect');
         const usersMultiselect = document.getElementById('usersMultiselect');
@@ -680,6 +812,7 @@
     });
 
     document.addEventListener('DOMContentLoaded', function() {
+        initDateTime();
         loadCategoriesAndUsers();
         loadTransactions(1);
         document.addEventListener('keydown', function(e) {

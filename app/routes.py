@@ -1000,6 +1000,78 @@ def move_category():
 
 
 # ==================== ТРАНЗАКЦИИ ======================================== ТРАНЗАКЦИИ ======================================== ТРАНЗАКЦИИ ====================
+
+@main_bp.route('/add-transaction', methods=['GET', 'POST'])
+@login_required
+def add_transaction():
+    if not current_user.family_id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
+        return redirect(url_for('main.no_family'))
+
+    if request.method == 'POST':
+        category_id = request.form.get('category_id')
+        amount = request.form.get('amount')
+        date_str = request.form.get('date')
+        time_str = request.form.get('time', '00:00')
+        comment = request.form.get('comment', '')
+
+        category = Category.query.get(category_id)
+        if not category or category.family_id != current_user.family_id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Категория не найдена'}), 404
+            flash('Категория не найдена', 'danger')
+            return redirect(url_for('main.add_transaction'))
+
+        try:
+            amount = Decimal(amount)
+            if amount <= 0:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'success': False, 'error': 'Сумма должна быть положительной'}), 400
+                flash('Сумма должна быть положительной', 'danger')
+                return redirect(url_for('main.add_transaction'))
+        except (ValueError, TypeError):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': 'Неверный формат суммы'}), 400
+            flash('Неверный формат суммы', 'danger')
+            return redirect(url_for('main.add_transaction'))
+
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        time = datetime.strptime(time_str, '%H:%M').time()
+
+        transaction = Transaction(
+            user_id=current_user.id,
+            category_id=category.id,
+            amount=amount,
+            date=date,
+            time=time,
+            comment=comment
+        )
+
+        db.session.add(transaction)
+        db.session.commit()
+
+        warning = calculate_limit_status(current_user, category, amount, date)
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            response_data = {'success': True}
+            if warning:
+                response_data['warning'] = warning
+            return jsonify(response_data)
+
+        if warning:
+            flash(warning, 'warning')
+        else:
+            flash('Транзакция успешно добавлена', 'success')
+
+        return redirect(url_for('main.transactions', added=1))
+
+    all_categories = Category.query.filter_by(family_id=current_user.family_id).all()
+    hierarchical_categories = build_category_tree(all_categories)
+
+    return render_template('add_transaction.html', categories=hierarchical_categories)
+
+
 @main_bp.route('/transactions')
 @login_required
 def transactions():

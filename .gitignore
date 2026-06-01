@@ -11,13 +11,14 @@ ENV/
 env.bak/
 venv.bak/
 
-# Database
 *.db
 *.sqlite
 *.sqlite3
 instance/*.db
 instance/*.sqlite
 instance/*.sqlite3
+
+!instance/.gitkeep
 
 # Flask
 instance/

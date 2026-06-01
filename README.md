@@ -21,7 +21,7 @@
 </blockquote>
 
 ### <u><span style="color: #ff7a00;">Простой старт!</span></u>
-![](media/start.mp4)
+![](media/start.gif)
 
 
 # <u><span style="color: #ff7a00;">Установка и запуск</span></u>

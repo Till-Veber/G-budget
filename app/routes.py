@@ -1093,15 +1093,22 @@ def api_transactions():
     if not current_user.family_id:
         return jsonify({'success': False, 'error': 'Семья не найдена'}), 400
 
-    all_transactions = Transaction.query.join(User).filter(
+    # Параметры пагинации
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = min(per_page, 100)  # Ограничиваем максимум 100 записей на страницу
+
+    # Базовый запрос
+    query = Transaction.query.join(User).filter(
         User.family_id == current_user.family_id
-    ).order_by(Transaction.date.desc(), Transaction.time.desc()).all()
+    ).order_by(Transaction.date.desc(), Transaction.time.desc())
 
-    categories = Category.query.filter_by(family_id=current_user.family_id).all()
-    categories_list = [{'id': c.id, 'name': c.name, 'type': c.type, 'color': c.color} for c in categories]
+    # Пагинация
+    paginated = query.paginate(page=page, per_page=per_page, error_out=False)
 
+    # Формируем список транзакций
     transactions_list = []
-    for txn in all_transactions:
+    for txn in paginated.items:
         transactions_list.append({
             'id': txn.id,
             'date': txn.date.strftime('%d.%m.%Y'),
@@ -1115,10 +1122,21 @@ def api_transactions():
             'comment': txn.comment or '—'
         })
 
+    categories = Category.query.filter_by(family_id=current_user.family_id).all()
+    categories_list = [{'id': c.id, 'name': c.name, 'type': c.type, 'color': c.color} for c in categories]
+
     return jsonify({
         'success': True,
         'transactions': transactions_list,
-        'categories': categories_list
+        'categories': categories_list,
+        'pagination': {
+            'page': paginated.page,
+            'per_page': paginated.per_page,
+            'total': paginated.total,
+            'pages': paginated.pages,
+            'has_prev': paginated.has_prev,
+            'has_next': paginated.has_next
+        }
     })
 
 

@@ -1403,6 +1403,54 @@ tbody tr:last-child td {
   border-top: 1px solid var(--border-primary);
 }
 
+
+/* ==================== ПАГИНАЦИЯ ==================== */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 24px;
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg-secondary);
+    padding: 8px 20px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-primary);
+}
+
+.pagination-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    color: var(--text-primary);
+    padding: 8px 20px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 500;
+    transition: var(--transition-fast);
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-primary);
+    transform: translateY(-2px);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-info {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    min-width: 200px;
+    text-align: center;
+}
+
 /* ==================== DRAG-AND-DROP ДЛЯ КАТЕГОРИЙ ==================== */
 /* Базовые стили категорий (categories.html) */
 .category-item {

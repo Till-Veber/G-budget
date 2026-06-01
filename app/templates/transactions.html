@@ -32,6 +32,15 @@
                 </table>
             </div>
         </div>
+
+        <!-- Пагинация -->
+        <div class="pagination-container" id="paginationContainer" style="display: none; margin-top: 24px; justify-content: center;">
+            <div class="pagination">
+                <button class="pagination-btn" id="prevPageBtn" onclick="loadTransactions(currentPage - 1)" disabled>← Назад</button>
+                <span class="pagination-info" id="paginationInfo">Страница 1 из 1</span>
+                <button class="pagination-btn" id="nextPageBtn" onclick="loadTransactions(currentPage + 1)" disabled>Вперед →</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -85,13 +94,17 @@
 <script>
     let editingTransactionId = null;
     let categoriesData = [];
+    let currentPage = 1;
+    let totalPages = 1;
 
-    async function loadTransactions() {
+    async function loadTransactions(page = 1) {
         const tbody = document.getElementById('transactionsTableBody');
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">Загрузка...</td></tr>';
 
+        currentPage = page;
+
         try {
-            const response = await fetch('/api/transactions');
+            const response = await fetch(`/api/transactions?page=${page}&per_page=50`);
             const data = await response.json();
 
             if (data.success && data.transactions) {
@@ -99,8 +112,14 @@
 
                 if (data.transactions.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">Нет транзакций</td></tr>';
+                    document.getElementById('paginationContainer').style.display = 'none';
                     return;
                 }
+
+                // Обновляем пагинацию
+                const pagination = data.pagination;
+                totalPages = pagination.pages;
+                updatePaginationUI(pagination);
 
                 tbody.innerHTML = data.transactions.map(txn => `
                     <tr data-id="${txn.id}" class="transaction-row">
@@ -135,10 +154,30 @@
                 `).join('');
             } else {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">Ошибка загрузки данных</td></tr>';
+                document.getElementById('paginationContainer').style.display = 'none';
             }
         } catch (err) {
             console.error('Error loading transactions:', err);
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">Ошибка соединения</td></tr>';
+            document.getElementById('paginationContainer').style.display = 'none';
+        }
+    }
+
+    function updatePaginationUI(pagination) {
+        const container = document.getElementById('paginationContainer');
+        const prevBtn = document.getElementById('prevPageBtn');
+        const nextBtn = document.getElementById('nextPageBtn');
+        const infoSpan = document.getElementById('paginationInfo');
+
+        container.style.display = 'flex';
+
+        infoSpan.textContent = `Страница ${pagination.page} из ${pagination.pages} (всего ${pagination.total} записей)`;
+
+        if (prevBtn) {
+            prevBtn.disabled = !pagination.has_prev;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = !pagination.has_next;
         }
     }
 
@@ -247,7 +286,7 @@
             if (data.success) {
                 showFlash('Транзакция обновлена', 'success');
                 closeEditModal();
-                await loadTransactions();
+                await loadTransactions(currentPage);
             } else {
                 errorDiv.textContent = data.error || 'Ошибка при сохранении';
                 errorDiv.style.display = 'block';
@@ -281,7 +320,7 @@
 
                     if (data.success) {
                         showFlash('Транзакция удалена', 'success');
-                        await loadTransactions();
+                        await loadTransactions(currentPage);
                     } else {
                         showFlash('Ошибка: ' + data.error, 'danger');
                     }
@@ -293,7 +332,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        loadTransactions();
+        loadTransactions(1);
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {

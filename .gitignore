@@ -21,7 +21,6 @@ instance/*.sqlite3
 !instance/.gitkeep
 
 # Flask
-instance/
 .env
 .flaskenv
 .wsgi

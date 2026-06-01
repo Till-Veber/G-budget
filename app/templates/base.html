@@ -122,26 +122,6 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="renameCategoryModal" onclick="closeRenameModalOnOverlay(event)">
-        <div class="modal" style="max-width: 400px;">
-            <div class="modal-header">
-                <h3 class="modal-title">Переименование категории</h3>
-                <button class="modal-close" onclick="closeRenameModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="renameCategoryForm" onsubmit="event.preventDefault(); confirmRename();">
-                    <div class="form-group">
-                        <label for="rename_category_name">Новое название</label>
-                        <input type="text" id="rename_category_name" required>
-                    </div>
-                    <div class="modal-footer" style="padding-top: 0; border-top: none; margin-top: 16px;">
-                        <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">Отмена</button>
-                        <button type="submit" class="btn btn-primary">Сохранить</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 
     <div class="modal-overlay" id="renameCategoryModal" onclick="closeRenameModalOnOverlay(event)">
         <div class="modal" style="max-width: 400px;">

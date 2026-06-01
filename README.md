@@ -29,7 +29,7 @@ cd family_budget
 python -m venv venv
 ```
 ```bash
-venv\Scripts\activate
+venv\Scripts\activate.bat
 ```
 
 #### MacOS/Linux:

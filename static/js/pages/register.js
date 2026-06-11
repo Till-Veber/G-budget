@@ -7,6 +7,8 @@ document.getElementById('registerForm').addEventListener('submit', async functio
     const errorDiv = document.getElementById('registerError');
     const submitBtn = this.querySelector('button[type="submit"]');
 
+    errorDiv.className = 'form-alert form-alert-danger';
+
     if (password !== confirm) {
         errorDiv.textContent = 'Пароли не совпадают';
         errorDiv.style.display = 'block';

@@ -8,6 +8,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 
     errorDiv.style.display = 'none';
     errorDiv.textContent = '';
+    errorDiv.className = 'form-alert form-alert-danger';
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Вход...';

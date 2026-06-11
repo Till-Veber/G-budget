@@ -902,54 +902,197 @@ tbody tr:last-child td {
 
 /* ==================== УВЕДОМЛЕНИЯ (ALERTS / FLASH) ==================== */
 .alert {
-  padding: 16px 20px;
-  border-radius: var(--radius-md);
-  margin-bottom: 16px;
-  border-left: 4px solid;
-  animation: slideInRight 0.4s ease forwards;
-  opacity: 0;
-  transform: translateX(100%);
-  backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    border-left: 4px solid;
+    backdrop-filter: blur(8px);
+    transform: translateX(100%);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease,
+                margin 0.2s ease;
+    margin-bottom: 12px;
+    min-width: 280px;
+    max-width: 420px;
+    pointer-events: auto;
+    box-shadow: var(--shadow-md);
 }
 
+.alert.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.alert.hide {
+    transform: translateX(100%);
+    opacity: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.alert-content {
+    flex: 1;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.alert-content strong {
+    font-weight: 700;
+    margin-right: 6px;
+}
+
+/* Цвета уведомлений */
 .alert-success {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: var(--success);
-  color: var(--success);
-  box-shadow: 0 4px 12px var(--success-glow);
+    background: rgba(16, 185, 129, 0.15);
+    border-left-color: var(--success);
+    color: var(--success);
+    border-right: 1px solid rgba(16, 185, 129, 0.3);
+    border-top: 1px solid rgba(16, 185, 129, 0.3);
+    border-bottom: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .alert-warning {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: var(--warning);
-  color: var(--warning);
-  box-shadow: 0 4px 12px var(--warning-glow);
+    background: rgba(245, 158, 11, 0.15);
+    border-left-color: var(--warning);
+    color: var(--warning);
+    border-right: 1px solid rgba(245, 158, 11, 0.3);
+    border-top: 1px solid rgba(245, 158, 11, 0.3);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-.alert-error,
-.alert-danger {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: var(--error);
-  color: var(--error);
-  box-shadow: 0 4px 12px var(--error-glow);
+.alert-danger,
+.alert-error {
+    background: rgba(239, 68, 68, 0.15);
+    border-left-color: var(--error);
+    color: var(--error);
+    border-right: 1px solid rgba(239, 68, 68, 0.3);
+    border-top: 1px solid rgba(239, 68, 68, 0.3);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .alert-info {
-  background: rgba(255, 122, 0, 0.1);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  box-shadow: 0 4px 12px var(--accent-glow);
+    background: rgba(255, 122, 0, 0.15);
+    border-left-color: var(--accent-primary);
+    color: var(--accent-primary);
+    border-right: 1px solid rgba(255, 122, 0, 0.3);
+    border-top: 1px solid rgba(255, 122, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 122, 0, 0.3);
 }
 
-/* Контейнер для уведомлений (плавающие справа сверху) */
+/* Кнопка закрытия уведомления */
+.alert-close {
+    background: none;
+    border: none;
+    color: currentColor;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.alert-close:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.1);
+}
+
+.alert-close svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+}
+
+/* Контейнер для уведомлений (фиксированный, плавающий) */
 .alerts-container {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 10000;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.alerts-container .alert {
+    pointer-events: auto;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .alerts-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    .alert {
+        max-width: none;
+        width: auto;
+        min-width: auto;
+    }
+}
+
+/* ==================== ЛОКАЛЬНЫЕ УВЕДОМЛЕНИЯ (ВНУТРИ ФОРМ) ==================== */
+.form-alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    border-left: 3px solid;
+    animation: fadeInUp 0.3s ease forwards;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(4px);
+}
+
+.form-alert.form-alert-danger {
+    background: rgba(239, 68, 68, 0.1);
+    border-left-color: var(--error);
+    color: var(--error);
+}
+
+.form-alert.form-alert-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-left-color: var(--warning);
+    color: var(--warning);
+}
+
+.form-alert.form-alert-success {
+    background: rgba(16, 185, 129, 0.1);
+    border-left-color: var(--success);
+    color: var(--success);
+}
+
+.form-alert.form-alert-info {
+    background: rgba(255, 122, 0, 0.1);
+    border-left-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+/* Анимация для локальных уведомлений */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ==================== ПРЕВЫШЕНИЕ ЛИМИТОВ ==================== */

@@ -9,6 +9,7 @@ document.getElementById('joinFamilyForm').addEventListener('submit', async funct
 
     errorDiv.style.display = 'none';
     errorDiv.textContent = '';
+    errorDiv.className = 'form-alert form-alert-danger';
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Проверка...';

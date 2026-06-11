@@ -50,72 +50,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
-<script>
-    document.getElementById('registerForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const password = document.getElementById('password').value;
-        const confirm = document.getElementById('confirm_password').value;
-        const errorDiv = document.getElementById('registerError');
-        const submitBtn = this.querySelector('button[type="submit"]');
-
-        // Клиентская проверка паролей (для мгновенной обратной связи)
-        if (password !== confirm) {
-            errorDiv.textContent = 'Пароли не совпадают';
-            errorDiv.style.display = 'block';
-            return;
-        }
-
-        // Скрываем предыдущую ошибку
-        errorDiv.style.display = 'none';
-        errorDiv.textContent = '';
-
-        // Блокируем кнопку
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Регистрация...';
-
-        const formData = new FormData(this);
-
-        try {
-            const response = await fetch('{{ url_for("main.register") }}', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Успешная регистрация - перенаправляем
-                window.location.href = data.redirect;
-            } else {
-                // Показываем ошибку от сервера
-                errorDiv.textContent = data.error;
-                errorDiv.style.display = 'block';
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Зарегистрироваться';
-
-                // Прокручиваем к ошибке
-                errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        } catch (err) {
-            errorDiv.textContent = 'Ошибка соединения с сервером';
-            errorDiv.style.display = 'block';
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Зарегистрироваться';
-        }
-    });
-
-    // Очищаем ошибку при вводе в поля
-    const inputs = document.querySelectorAll('#registerForm input');
-    inputs.forEach(input => {
-        input.addEventListener('input', () => {
-            const errorDiv = document.getElementById('registerError');
-            errorDiv.style.display = 'none';
-        });
-    });
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/pages/register.js') }}"></script>
 {% endblock %}

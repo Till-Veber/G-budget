@@ -212,6 +212,7 @@ function toggleCategory(itemId) {
     }
     visibleItemsMap[itemId] = !visibleItemsMap[itemId];
 
+    // Обновляем класс disabled у элемента легенды
     const legendItem = document.querySelector(`.legend-item[data-id="${itemId}"]`);
     if (legendItem) {
         if (!visibleItemsMap[itemId]) {
@@ -219,6 +220,11 @@ function toggleCategory(itemId) {
         } else {
             legendItem.classList.remove('disabled');
         }
+    }
+
+    // Перерисовываем легенду с новыми процентами
+    if (currentReportData) {
+        renderCategoryLegend(currentReportData);
     }
 
     updateCategoryChartData();
@@ -386,10 +392,21 @@ function renderCategoryLegend(data) {
         return;
     }
 
+    // Вычисляем текущую видимую сумму
+    const visibleTotal = data.items.reduce((sum, item) => {
+        if (visibleItemsMap[item.id] !== false) {
+            return sum + item.value;
+        }
+        return sum;
+    }, 0);
+
     data.items.forEach(item => {
-        const percent = (item.value / data.total) * 100;
+        const isVisible = visibleItemsMap[item.id] !== false;
+        // Пересчитываем процент относительно видимой суммы
+        const percent = visibleTotal > 0 && isVisible ? (item.value / visibleTotal) * 100 : 0;
+
         const legendItem = document.createElement('div');
-        legendItem.className = `legend-item ${!visibleItemsMap[item.id] ? 'disabled' : ''}`;
+        legendItem.className = `legend-item ${!isVisible ? 'disabled' : ''}`;
         legendItem.setAttribute('data-id', item.id);
         legendItem.innerHTML = `
             <span class="legend-color" style="background: ${item.color}; box-shadow: 0 0 10px ${item.color};"></span>

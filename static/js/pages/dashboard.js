@@ -43,6 +43,10 @@ function toggleCategory(itemId) {
         }
     }
 
+    if (chartData) {
+        renderLegend(chartData);
+    }
+
     updateChartData();
 }
 
@@ -169,14 +173,19 @@ function renderLegend(data) {
         return;
     }
 
-    data.items.forEach(item => {
-        if (visibleItemsMap[item.id] === undefined) {
-            visibleItemsMap[item.id] = true;
+    const visibleTotal = data.items.reduce((sum, item) => {
+        if (visibleItemsMap[item.id] !== false) {
+            return sum + item.value;
         }
+        return sum;
+    }, 0);
 
-        const percent = (item.value / data.total) * 100;
+    data.items.forEach(item => {
+        const isVisible = visibleItemsMap[item.id] !== false;
+        const percent = visibleTotal > 0 && isVisible ? (item.value / visibleTotal) * 100 : 0;
+
         const legendItem = document.createElement('div');
-        legendItem.className = `legend-item ${!visibleItemsMap[item.id] ? 'disabled' : ''}`;
+        legendItem.className = `legend-item ${!isVisible ? 'disabled' : ''}`;
         legendItem.setAttribute('data-id', item.id);
         legendItem.innerHTML = `
             <span class="legend-color" style="background: ${item.color}; box-shadow: 0 0 10px ${item.color};"></span>

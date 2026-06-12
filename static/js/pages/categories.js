@@ -259,8 +259,9 @@ async function handleRootDrop(e) {
 function openColorPickerForCategory() {
     openColorPicker(selectedColor, function(color) {
         selectedColor = color;
-        document.getElementById('categoryColorDisplay').style.background = color;
-        document.getElementById('categoryColorDisplay').style.boxShadow = `0 2px 8px ${color}60`;
+        const colorDisplay = document.getElementById('categoryColorDisplay');
+        colorDisplay.style.background = color;
+        colorDisplay.style.boxShadow = `0 2px 8px ${color}60`;
     });
 }
 
@@ -317,8 +318,13 @@ async function addCategory() {
             document.getElementById('cat_name').value = '';
             document.getElementById('cat_type').value = 'Расход';
             document.getElementById('cat_parent').value = '';
+
+            // Сбрасываем цвет на стандартный
             selectedColor = '#ff7a00';
-            document.getElementById('categoryColorDisplay').style.background = selectedColor;
+            const colorDisplay = document.getElementById('categoryColorDisplay');
+            colorDisplay.style.background = selectedColor;
+            colorDisplay.style.boxShadow = `0 2px 8px ${selectedColor}60`;
+
             await loadCategoryTree();
         } else {
             errorDiv.textContent = result.error || 'Неизвестная ошибка';

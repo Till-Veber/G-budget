@@ -1916,107 +1916,149 @@ input[type="checkbox"].multiselect-checkbox,
 }
 
 /* ==================== DRAG-AND-DROP ДЛЯ КАТЕГОРИЙ ==================== */
-/* Базовые стили категорий (categories.html) */
 .category-item {
-  margin: 8px 0;
-  padding: 12px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  cursor: grab;
-  user-select: none;
-}
-
-.category-item:hover {
-  box-shadow: 0 2px 12px var(--accent-glow);
-  border: 1px solid var(--accent-primary);
-  margin: 7px 0;
+    margin: 8px 0;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    cursor: grab;
+    user-select: none;
+    border: 1px solid transparent;
+    box-sizing: border-box;
 }
 
 .category-item:active {
-  cursor: grabbing;
+    cursor: grabbing;
 }
 
 .category-item.dragging {
-  opacity: 0.4;
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+.category-item:hover {
+    box-shadow: 0 0 0 1px var(--accent-primary), 0 2px 12px var(--accent-glow);
+    background: var(--bg-hover);
 }
 
 .category-item.drag-over {
-  border: 2px dashed var(--accent-primary);
-  background: var(--bg-hover);
+    box-shadow: 0 0 0 2px var(--accent-primary), 0 0 15px var(--accent-glow-strong);
+    background: var(--bg-hover);
+    position: relative;
+}
+
+.category-item.drag-over-outline {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.category-item:hover {
+    margin: 8px 0;
 }
 
 .category-item.drag-over-before {
-  border-top: 3px solid var(--accent-primary);
+    position: relative;
+}
+
+.category-item.drag-over-before::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent-primary);
+    border-radius: 2px;
+    box-shadow: 0 0 8px var(--accent-glow-strong);
+    pointer-events: none;
 }
 
 .category-item.drag-over-after {
-  border-bottom: 3px solid var(--accent-primary);
+    position: relative;
+}
+
+.category-item.drag-over-after::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent-primary);
+    border-radius: 2px;
+    box-shadow: 0 0 8px var(--accent-glow-strong);
+    pointer-events: none;
 }
 
 .category-children {
-  margin-left: 32px;
-  margin-top: 8px;
-  border-left: 2px solid var(--border-primary);
-  padding-left: 16px;
-  transition: all 0.2s ease;
+    margin-left: 32px;
+    margin-top: 8px;
+    border-left: 2px solid var(--border-primary);
+    padding-left: 16px;
+    transition: all 0.2s ease;
 }
 
 .category-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex: 1;
 }
 
 .category-color-badge {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 2px solid var(--border-primary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid var(--border-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+}
+
+.category-item:hover .category-color-badge {
+    transform: scale(1.05);
 }
 
 .category-name {
-  font-weight: 600;
-  font-size: 1rem;
+    font-weight: 600;
+    font-size: 1rem;
 }
 
 .category-actions {
-  display: flex;
-  gap: 8px;
+    display: flex;
+    gap: 8px;
 }
 
 .category-actions button {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .category-actions button:hover {
-  color: var(--accent-primary);
-  background: var(--bg-card);
+    color: var(--accent-primary);
+    background: var(--bg-card);
 }
 
 .drag-placeholder {
-  height: 60px;
-  background: rgba(255, 122, 0, 0.15);
-  border: 2px dashed var(--accent-primary);
-  border-radius: var(--radius-md);
-  margin: 8px 0;
+    height: 60px;
+    background: rgba(255, 122, 0, 0.15);
+    border: 2px dashed var(--accent-primary);
+    border-radius: var(--radius-md);
+    margin: 8px 0;
 }
 
 .drop-zone-root {
